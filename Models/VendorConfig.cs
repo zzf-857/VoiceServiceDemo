@@ -89,6 +89,7 @@ public class TtsRequest
     public string VoiceId { get; set; } = "";
     public string Text { get; set; } = "";
     public double Speed { get; set; } = 1.0;
+    public double Volume { get; set; } = 1.0;
 }
 
 /// <summary>

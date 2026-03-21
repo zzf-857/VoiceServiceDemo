@@ -445,7 +445,8 @@ public class TtsService
             SessionId = Guid.NewGuid().ToString(),
             VoiceType = long.Parse(request.VoiceId),
             Codec = "mp3",
-            Speed = request.Speed
+            Speed = (int)Math.Round(request.Speed),
+            Volume = (int)Math.Round(request.Volume)
         };
 
         var body = JsonSerializer.Serialize(bodyObj);
@@ -605,12 +606,11 @@ public class TtsService
             ? "" 
             : (keys.Length >= 3 && !string.IsNullOrWhiteSpace(keys[2]) ? keys[2] : "volcano_tts");
 
-        // 火山引擎的请求结构
         var body = new
         {
             app = new { appid = appId, token = "access_token", cluster = cluster },
             user = new { uid = "388808087185088" },
-            audio = new { voice_type = request.VoiceId, encoding = "mp3", speed_ratio = request.Speed, volume_ratio = 1.0, pitch_ratio = 1.0 },
+            audio = new { voice_type = request.VoiceId, encoding = "mp3", speed_ratio = request.Speed, volume_ratio = request.Volume, pitch_ratio = 1.0 },
             request = new { reqid = Guid.NewGuid().ToString(), text = request.Text, text_type = "plain", operation = "query", with_frontend = 1, frontend_type = "unitTson" }
         };
 
@@ -667,7 +667,7 @@ public class TtsService
 
         var accessToken = tokenElem.GetString();
         var text = Uri.EscapeDataString(request.Text);
-        var url = $"https://tsn.baidu.com/text2audio?tex={text}&tok={accessToken}&cuid=voice_ops&ctp=1&lan=zh&spd=5&pit=5&vol=5&per={request.VoiceId}&aue=3";
+        var url = $"https://tsn.baidu.com/text2audio?tex={text}&tok={accessToken}&cuid=voice_ops&ctp=1&lan=zh&spd={(int)Math.Round(request.Speed)}&pit=5&vol={(int)Math.Round(request.Volume)}&per={request.VoiceId}&aue=3";
 
         var response = await _httpClient.GetAsync(url);
         if (!response.IsSuccessStatusCode)
@@ -688,7 +688,9 @@ public class TtsService
             return new TtsResult { Success = false, ErrorMessage = "Azure Key 格式应为: subscription_key|region (如 xxxxx|eastasia)" };
 
         var ssml = $@"<speak version='1.0' xml:lang='zh-CN'>
-            <voice name='{request.VoiceId}'>{System.Security.SecurityElement.Escape(request.Text)}</voice>
+            <voice name='{request.VoiceId}'>
+                <prosody rate='{request.Speed:0.00}' volume='{request.Volume:0.00}'>{System.Security.SecurityElement.Escape(request.Text)}</prosody>
+            </voice>
         </speak>";
 
         var url = $"https://{keys[1]}.tts.speech.microsoft.com/cognitiveservices/v1";
@@ -714,7 +716,7 @@ public class TtsService
         {
             input = new { text = request.Text },
             voice = new { languageCode = "cmn-CN", name = request.VoiceId },
-            audioConfig = new { audioEncoding = "MP3", speakingRate = request.Speed }
+            audioConfig = new { audioEncoding = "MP3", speakingRate = request.Speed, volumeGainDb = request.Volume }
         };
 
         var url = $"https://texttospeech.googleapis.com/v1/text:synthesize?key={apiKey}";

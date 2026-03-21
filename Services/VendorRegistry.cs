@@ -18,6 +18,8 @@ public static class VendorRegistry
             IconName = "flame",
             ApiBaseUrl = "https://openspeech.bytedance.com/api/v1/tts",
             DocumentationUrl = "https://www.volcengine.com/docs/6561/79823",
+            SpeedDef = new TtsParameterDef { Min = 0.5, Max = 2.0, Default = 1.0, Step = 0.1 },
+            VolumeDef = new TtsParameterDef { Min = 0.1, Max = 3.0, Default = 1.0, Step = 0.1 },
             SupportsModelFetch = false,
             SupportsVoiceFetch = true,
             DefaultModels = new()
@@ -47,6 +49,8 @@ public static class VendorRegistry
             IconName = "message-square",
             ApiBaseUrl = "https://tts.tencentcloudapi.com",
             DocumentationUrl = "https://cloud.tencent.com/document/product/1073",
+            SpeedDef = new TtsParameterDef { Min = -2, Max = 2, Default = 0, Step = 1 }, // 腾讯音量语速都采用整数范围
+            VolumeDef = new TtsParameterDef { Min = 0, Max = 10, Default = 0, Step = 1 },
             SupportsModelFetch = false,
             SupportsVoiceFetch = true,
             DefaultModels = new()
@@ -72,6 +76,8 @@ public static class VendorRegistry
             IconName = "cloud",
             ApiBaseUrl = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2audio/generation",
             DocumentationUrl = "https://help.aliyun.com/zh/model-studio/developer-reference/cosyvoice",
+            SpeedDef = new TtsParameterDef { Min = 0.5, Max = 2.0, Default = 1.0, Step = 0.1 },
+            VolumeDef = new TtsParameterDef { IsSupported = false }, // 暂时不支持直接调音量
             SupportsModelFetch = false,
             SupportsVoiceFetch = false,
             DefaultModels = new()
@@ -96,6 +102,8 @@ public static class VendorRegistry
             IconName = "scan-search",
             ApiBaseUrl = "https://tsn.baidu.com/text2audio",
             DocumentationUrl = "https://ai.baidu.com/ai-doc/SPEECH/Jlbxdezuf",
+            SpeedDef = new TtsParameterDef { Min = 0, Max = 15, Default = 5, Step = 1 },
+            VolumeDef = new TtsParameterDef { Min = 0, Max = 15, Default = 5, Step = 1 },
             SupportsModelFetch = false,
             SupportsVoiceFetch = false,
             DefaultModels = new()
@@ -120,6 +128,8 @@ public static class VendorRegistry
             IconName = "layout-template",
             ApiBaseUrl = "https://{region}.tts.speech.microsoft.com/cognitiveservices/v1",
             DocumentationUrl = "https://learn.microsoft.com/zh-cn/azure/ai-services/speech-service/rest-text-to-speech",
+            SpeedDef = new TtsParameterDef { Min = 0.1, Max = 3.0, Default = 1.0, Step = 0.1 },
+            VolumeDef = new TtsParameterDef { Min = 0.0, Max = 100.0, Default = 100.0, Step = 1 }, // 以百分比映射
             SupportsModelFetch = false,
             SupportsVoiceFetch = true,
             DefaultModels = new()
@@ -141,6 +151,8 @@ public static class VendorRegistry
             IconName = "globe",
             ApiBaseUrl = "https://texttospeech.googleapis.com/v1/text:synthesize",
             DocumentationUrl = "https://cloud.google.com/text-to-speech/docs",
+            SpeedDef = new TtsParameterDef { Min = 0.25, Max = 4.0, Default = 1.0, Step = 0.05 },
+            VolumeDef = new TtsParameterDef { Min = -96, Max = 16, Default = 0, Step = 1 }, // gain DB
             SupportsModelFetch = false,
             SupportsVoiceFetch = true,
             DefaultModels = new()
@@ -164,6 +176,8 @@ public static class VendorRegistry
             IconName = "bot",
             ApiBaseUrl = "https://api.openai.com/v1/audio/speech",
             DocumentationUrl = "https://platform.openai.com/docs/guides/text-to-speech",
+            SpeedDef = new TtsParameterDef { Min = 0.25, Max = 4.0, Default = 1.0, Step = 0.05 },
+            VolumeDef = new TtsParameterDef { IsSupported = false },
             SupportsModelFetch = false,
             SupportsVoiceFetch = false,
             DefaultModels = new()

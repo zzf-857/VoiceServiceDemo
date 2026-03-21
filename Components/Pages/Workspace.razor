@@ -177,6 +177,35 @@
                 </div>
             }
 
+            <!-- 语速与音量调节 -->
+            <div class="voice-sliders" style="display: flex; gap: 24px; margin-bottom: 16px;">
+                <div class="slider-group" style="flex: 1;">
+                    <div class="slider-header" style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span class="slider-label" style="font-size: 14px; font-weight: 500; color: #555;">语速</span>
+                        <span class="slider-value" style="font-size: 14px; font-family: monospace; color: #0078d4;">@_speed</span>
+                    </div>
+                    <input type="range" class="win-slider" 
+                           min="@_vendor.SpeedDef.Min" 
+                           max="@_vendor.SpeedDef.Max" 
+                           step="0.1" 
+                           @bind="_speed" 
+                           @bind:event="oninput" />
+                </div>
+                
+                <div class="slider-group" style="flex: 1;">
+                    <div class="slider-header" style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span class="slider-label" style="font-size: 14px; font-weight: 500; color: #555;">音量</span>
+                        <span class="slider-value" style="font-size: 14px; font-family: monospace; color: #0078d4;">@_volume</span>
+                    </div>
+                    <input type="range" class="win-slider" 
+                           min="@_vendor.VolumeDef.Min" 
+                           max="@_vendor.VolumeDef.Max" 
+                           step="1" 
+                           @bind="_volume" 
+                           @bind:event="oninput" />
+                </div>
+            </div>
+
             <!-- 文本输入 -->
             <div class="form-group">
                 <textarea class="text-area" placeholder="在此输入您想要转换成语音的测试文本内容…" @bind="_inputText"></textarea>
@@ -276,6 +305,8 @@
     private string _selectedModelId = "";
     private string _selectedVoiceId = "";
     private string _inputText = "";
+    private double _speed = 1.0;
+    private double _volume = 50.0;
     private bool _isGenerating = false;
     private string? _errorMessage;
     private TtsResult? _result;
@@ -427,6 +458,9 @@
         _vendor = VendorRegistry.GetById(VendorId);
         if (_vendor != null)
         {
+            _speed = _vendor.SpeedDef.Default;
+            _volume = _vendor.VolumeDef.Default;
+
             // 支持在线获取的厂商：尝试从本地缓存加载
             if (_vendor.SupportsVoiceFetch)
             {
@@ -540,7 +574,8 @@
             ModelId = _selectedModelId,
             VoiceId = _selectedVoiceId,
             Text = _inputText,
-            Speed = 1.0
+            Speed = _speed,
+            Volume = _volume
         };
 
         _result = await TtsService.GenerateAsync(request);
