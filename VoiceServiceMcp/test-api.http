@@ -1,0 +1,82 @@
+### 健康检查
+GET http://localhost:5000/health
+
+### MCP Initialize
+POST http://localhost:5000/mcp/sse
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "test-client",
+      "version": "1.0.0"
+    }
+  }
+}
+
+### MCP Tools List
+POST http://localhost:5000/mcp/sse
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/list",
+  "params": {}
+}
+
+### Test Connection (火山引擎)
+POST http://localhost:5000/mcp/sse
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "test_connection",
+    "arguments": {
+      "vendor": "huoshan"
+    }
+  }
+}
+
+### List Voices (火山引擎)
+POST http://localhost:5000/mcp/sse
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "tools/call",
+  "params": {
+    "name": "list_voices",
+    "arguments": {
+      "vendor": "huoshan"
+    }
+  }
+}
+
+### Generate TTS (火山引擎)
+POST http://localhost:5000/mcp/sse
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "method": "tools/call",
+  "params": {
+    "name": "generate_tts",
+    "arguments": {
+      "vendor": "huoshan",
+      "voice_id": "zh_female_wenrouxiaoya_moon_bigtts",
+      "text": "你好，这是一个测试。",
+      "speed": 1.0
+    }
+  }
+}

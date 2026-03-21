@@ -1,0 +1,31 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+
+# 环境变量（包含敏感信息）
+.env
+
+# 输出目录
+output/
+*.mp3
+*.wav
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 日志
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

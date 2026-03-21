@@ -1,0 +1,321 @@
+@page "/settings"
+
+@inject SettingsService SettingsService
+@inject TtsService TtsService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<div class="page-header">
+    <h2>全局系统设置</h2>
+    <p>集中管理各大厂商的 API Key 及音频默认存储路径等偏好设置。</p>
+</div>
+
+<div class="settings-section">
+    <h3>API Keys 凭证管理</h3>
+    <div class="settings-box">
+        @foreach (var vendor in VendorRegistry.All)
+        {
+            var vid = vendor.Id;
+            <div class="settings-row">
+                <div class="row-label">@vendor.Name</div>
+                <div class="row-input" style="display:flex;gap:8px;align-items:center;">
+                    @if (vid == "huoshan")
+                    {
+                        var parts = GetApiKey(vid).Split('|');
+                        var appId = parts.Length > 0 ? parts[0] : "";
+                        var token = parts.Length > 1 ? parts[1] : "";
+                        var cluster = parts.Length > 2 ? parts[2] : "";
+                        var ak = parts.Length > 3 ? parts[3] : "";
+                        var sk = parts.Length > 4 ? parts[4] : "";
+                        
+                        <div style="flex:1; display:flex; gap:8px; flex-wrap:wrap;">
+                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:1; min-width:120px;" placeholder="AppID" value="@appId" @onchange='e => UpdateHuoshanKey(0, e.Value?.ToString() ?? "")' />
+                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:2; min-width:180px;" placeholder="Access Token ( TTS )" value="@token" @onchange='e => UpdateHuoshanKey(1, e.Value?.ToString() ?? "")' />
+                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:1; min-width:120px;" placeholder="Cluster (可选)" value="@cluster" @onchange='e => UpdateHuoshanKey(2, e.Value?.ToString() ?? "")' title="默认为 volcano_tts" />
+                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:1.5; min-width:140px;" placeholder="Access Key ( API )" value="@ak" @onchange='e => UpdateHuoshanKey(3, e.Value?.ToString() ?? "")' />
+                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:1.5; min-width:140px;" placeholder="Secret Key ( API )" value="@sk" @onchange='e => UpdateHuoshanKey(4, e.Value?.ToString() ?? "")' />
+                            <button type="button" class="btn btn-outline" style="padding:4px; border:none; background:transparent;" @onclick="() => TogglePasswordVisibility(vid)">
+                                @if (IsPasswordVisible(vid))
+                                {
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                                }
+                                else
+                                {
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                }
+                            </button>
+                        </div>
+                    }
+                    else if (vid == "tencent")
+                    {
+                        var tcParts = GetApiKey(vid).Split('|');
+                        var tcAppId = tcParts.Length > 0 ? tcParts[0] : "";
+                        var tcSecretId = tcParts.Length > 1 ? tcParts[1] : "";
+                        var tcSecretKey = tcParts.Length > 2 ? tcParts[2] : "";
+
+                        <div style="flex:1; display:flex; gap:8px; flex-wrap:wrap;">
+                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:1; min-width:130px;" placeholder="AppID" value="@tcAppId" @onchange='e => UpdateTencentKey(0, e.Value?.ToString() ?? "")' />
+                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:1.5; min-width:200px;" placeholder="SecretId" value="@tcSecretId" @onchange='e => UpdateTencentKey(1, e.Value?.ToString() ?? "")' />
+                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:1.5; min-width:200px;" placeholder="SecretKey" value="@tcSecretKey" @onchange='e => UpdateTencentKey(2, e.Value?.ToString() ?? "")' />
+                            <button type="button" class="btn btn-outline" style="padding:4px; border:none; background:transparent;" @onclick="() => TogglePasswordVisibility(vid)">
+                                @if (IsPasswordVisible(vid))
+                                {
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                                }
+                                else
+                                {
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                }
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="position:relative; flex:1; display:flex; align-items:center;">
+                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")"
+                                   style="flex:1; padding-right:40px;"
+                                   placeholder="@GetPlaceholder(vid)"
+                                   value="@GetApiKey(vid)"
+                                   @onchange="e => OnApiKeyChanged(vid, e)" />
+                            <button type="button" class="btn btn-outline"
+                                    style="position:absolute; right:4px; top:50%; transform:translateY(-50%); padding:4px; border:none; background:transparent;"
+                                    @onclick="() => TogglePasswordVisibility(vid)">
+                                @if (IsPasswordVisible(vid))
+                                {
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                                }
+                                else
+                                {
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                }
+                            </button>
+                        </div>
+                    }
+                    <button class="btn btn-outline"
+                            style="padding:8px 14px;font-size:12px;white-space:nowrap;"
+                            disabled="@(string.IsNullOrWhiteSpace(GetApiKey(vid)) || IsTestingVendor(vid))"
+                            @onclick="() => TestVendor(vid)">
+                        @if (IsTestingVendor(vid))
+                        {
+                            <span class="spinner" style="width:14px;height:14px;border-width:2px;"></span>
+                        }
+                        else
+                        {
+                            <span>测试连通</span>
+                        }
+                    </button>
+                </div>
+                @if (_testResults.ContainsKey(vid))
+                {
+                    var result = _testResults[vid];
+                    <div style="margin-left:168px;margin-top:6px;">
+                        <span style="font-size:13px;color:@(result.Success ? "#4ade80" : "#fca5a5");">
+                            @result.Message
+                        </span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="settings-actions">
+        <button class="btn btn-outline" @onclick="GoHome">返回首页</button>
+        <button class="btn btn-primary" @onclick="SaveSettings">
+            <svg style="width:16px;height:16px;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            保存配置
+        </button>
+    </div>
+</div>
+
+<div class="settings-section" style="margin-top: 24px;">
+    <h3>API Base URL 一览</h3>
+    <div class="settings-box">
+        @foreach (var vendor in VendorRegistry.All)
+        {
+            <div class="settings-row">
+                <div class="row-label">@vendor.Name</div>
+                <div class="row-input" style="display:flex;align-items:center;gap:8px;">
+                    <code style="flex:1;font-size:13px;color:var(--text-muted);font-family:var(--font-mono);background:rgba(255,255,255,0.04);padding:6px 10px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid rgba(255,255,255,0.06);">@vendor.ApiBaseUrl</code>
+                    <button class="btn btn-outline" style="padding:6px 12px;font-size:12px;white-space:nowrap;min-width:56px;" @onclick="() => CopyToClipboard(vendor.Id, vendor.ApiBaseUrl)">
+                        @if (_copiedVendor == vendor.Id)
+                        {
+                            <span style="color:#4ade80;">✓ 已复制</span>
+                        }
+                        else
+                        {
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px;"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                            <span>复制</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="settings-section" style="margin-top: 24px;">
+    <h3>输出目录</h3>
+    <div class="settings-box">
+        <div class="settings-row">
+            <div class="row-label">音频保存路径</div>
+            <div class="row-input">
+                <input type="text"
+                       value="@SettingsService.Settings.OutputDirectory"
+                       @onchange="OnOutputDirChanged" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="settings-section" style="margin-top: 24px;">
+    <h3>厂商官方文档快速跳转</h3>
+    <div class="settings-box">
+        @foreach (var vendor in VendorRegistry.All)
+        {
+            <div class="settings-row">
+                <div class="row-label">@vendor.Name</div>
+                <div class="row-input" style="display:flex;align-items:center;gap:12px;">
+                    <span style="font-size:13px;color:var(--text-muted);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">@vendor.DocumentationUrl</span>
+                    <a href="@vendor.DocumentationUrl" target="_blank" class="btn btn-outline" style="padding:6px 12px;font-size:12px;text-decoration:none;white-space:nowrap;">打开</a>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@if (_showSaved)
+{
+    <div style="position:fixed;bottom:32px;right:32px;background:#1a2e1a;color:#4ade80;padding:16px 24px;border-radius:8px;font-size:14px;border:1px solid #2d5a2d;z-index:999;">
+        ✓ 配置已保存
+    </div>
+}
+
+@code {
+    private Dictionary<string, string> _tempKeys = new();
+    private Dictionary<string, (bool Success, string Message)> _testResults = new();
+    private HashSet<string> _testingVendors = new();
+    private HashSet<string> _visiblePasswords = new();
+    private bool _showSaved = false;
+    private string? _copiedVendor = null;
+    private System.Threading.CancellationTokenSource? _copyCts;
+
+    protected override void OnInitialized()
+    {
+        foreach (var vendor in VendorRegistry.All)
+        {
+            _tempKeys[vendor.Id] = SettingsService.GetApiKey(vendor.Id);
+        }
+    }
+
+    private string GetApiKey(string vendorId) =>
+        _tempKeys.TryGetValue(vendorId, out var k) ? k : string.Empty;
+
+    private bool IsTestingVendor(string vendorId) => _testingVendors.Contains(vendorId);
+
+    private bool IsPasswordVisible(string vendorId) => _visiblePasswords.Contains(vendorId);
+
+    private void TogglePasswordVisibility(string vendorId)
+    {
+        if (_visiblePasswords.Contains(vendorId))
+            _visiblePasswords.Remove(vendorId);
+        else
+            _visiblePasswords.Add(vendorId);
+    }
+
+    private string GetPlaceholder(string vendorId) => vendorId switch
+    {
+        "baidu" => "格式: api_key|secret_key",
+        "azure" => "格式: subscription_key|region（东部亚洲为 eastasia）",
+        "huoshan" => "格式: AppID|AccessToken 或 AppID|AccessToken|Cluster",
+        "tencent" => "格式: AppID|SecretId|SecretKey",
+        _ => "此处输入 API 凭证"
+    };
+
+    private void OnApiKeyChanged(string vendorId, ChangeEventArgs e)
+    {
+        _tempKeys[vendorId] = e.Value?.ToString() ?? string.Empty;
+        // 清除之前的测试结果
+        _testResults.Remove(vendorId);
+    }
+
+    private void UpdateHuoshanKey(int index, string value)
+    {
+        var current = GetApiKey("huoshan");
+        var parts = current.Split('|').ToList();
+        while (parts.Count < 5) parts.Add("");
+        parts[index] = value;
+        _tempKeys["huoshan"] = string.Join("|", parts).TrimEnd('|');
+        _testResults.Remove("huoshan");
+    }
+
+    private void UpdateTencentKey(int index, string value)
+    {
+        var current = GetApiKey("tencent");
+        var parts = current.Split('|').ToList();
+        while (parts.Count < 3) parts.Add("");
+        parts[index] = value;
+        _tempKeys["tencent"] = string.Join("|", parts).TrimEnd('|');
+        _testResults.Remove("tencent");
+    }
+
+    private async Task TestVendor(string vendorId)
+    {
+        // 先保存最新的 key 再测试
+        SettingsService.SetApiKey(vendorId, _tempKeys.GetValueOrDefault(vendorId, string.Empty));
+
+        _testingVendors.Add(vendorId);
+        _testResults.Remove(vendorId);
+        StateHasChanged();
+
+        var result = await TtsService.TestConnectivityAsync(vendorId);
+        _testResults[vendorId] = result;
+        _testingVendors.Remove(vendorId);
+        StateHasChanged();
+    }
+
+    private void GoHome()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    private void OnOutputDirChanged(ChangeEventArgs e)
+    {
+        SettingsService.Settings.OutputDirectory = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private async Task SaveSettings()
+    {
+        foreach (var kv in _tempKeys)
+        {
+            SettingsService.SetApiKey(kv.Key, kv.Value);
+        }
+        SettingsService.Save();
+
+        _showSaved = true;
+        StateHasChanged();
+        await Task.Delay(2000);
+        _showSaved = false;
+        StateHasChanged();
+    }
+
+    private async Task CopyToClipboard(string vendorId, string text)
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+
+        // Cancel any previous timer
+        _copyCts?.Cancel();
+        _copyCts = new System.Threading.CancellationTokenSource();
+        var token = _copyCts.Token;
+
+        _copiedVendor = vendorId;
+        StateHasChanged();
+
+        try
+        {
+            await Task.Delay(2000, token);
+            _copiedVendor = null;
+            StateHasChanged();
+        }
+        catch (TaskCanceledException) { }
+    }
+}

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>语音测试工作台</title>
+    <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+    <div id="app">正在加载...</div>
+
+    <script src="_framework/blazor.webview.js"></script>
+    <script>
+        // 音频播放 JS 互操作
+        // 核心原理：WebView2 不允许 Audio 通过 file:/// 加载本地文件
+        // 所以改为：C# 读取文件字节 → base64 传给 JS → JS 解码为 Blob → 用 Blob URL 播放
+        window.audioInterop = {
+            _audio: null,
+            _updateInterval: null,
+            _blobUrl: null,
+
+            // 通过 base64 数据加载音频（从 C# 端传入）
+            playBase64: function (base64Data, mimeType) {
+                // 1. 先清理旧的
+                this._cleanup();
+
+                // 2. base64 → ArrayBuffer → Blob → URL
+                var binary = atob(base64Data);
+                var len = binary.length;
+                var bytes = new Uint8Array(len);
+                for (var i = 0; i < len; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                var blob = new Blob([bytes], { type: mimeType || 'audio/mpeg' });
+                this._blobUrl = URL.createObjectURL(blob);
+
+                // 3. 创建 Audio 并播放
+                this._audio = new Audio(this._blobUrl);
+                this._audio.play().catch(function(e) { console.error('播放失败:', e); });
+                return true;
+            },
+
+            pause: function () {
+                if (this._audio) this._audio.pause();
+            },
+
+            resume: function () {
+                if (this._audio) this._audio.play();
+            },
+
+            stop: function () {
+                if (this._audio) {
+                    this._audio.pause();
+                    this._audio.currentTime = 0;
+                }
+            },
+
+            seekTo: function (fraction) {
+                if (this._audio && this._audio.duration && !isNaN(this._audio.duration)) {
+                    this._audio.currentTime = fraction * this._audio.duration;
+                }
+            },
+
+            setPlaybackRate: function (rate) {
+                if (this._audio) this._audio.playbackRate = rate;
+            },
+
+            startUpdates: function (dotNetRef) {
+                clearInterval(this._updateInterval);
+                var self = this;
+                this._updateInterval = setInterval(function () {
+                    if (self._audio) {
+                        var ct = self._audio.currentTime || 0;
+                        var dur = self._audio.duration || 0;
+                        if (isNaN(dur)) dur = 0;
+                        var playing = !self._audio.paused;
+                        dotNetRef.invokeMethodAsync('OnAudioTimeUpdate', ct, dur, playing);
+                    }
+                }, 200);
+            },
+
+            stopUpdates: function () {
+                clearInterval(this._updateInterval);
+            },
+
+            _cleanup: function () {
+                if (this._audio) {
+                    this._audio.pause();
+                    this._audio = null;
+                }
+                clearInterval(this._updateInterval);
+                if (this._blobUrl) {
+                    URL.revokeObjectURL(this._blobUrl);
+                    this._blobUrl = null;
+                }
+            }
+        };
+    </script>
+</body>
+</html>
