@@ -9,6 +9,7 @@
 
 [assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("wwwroot/css/app.css")]
 [assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("wwwroot/index.html")]
+[assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("aliyun_voices_raw.json")]
 [assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("components/app.razor")]
 [assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("components/layout/mainlayout.razor")]
 [assembly: System.Windows.Resources.AssemblyAssociatedContentFileAttribute("components/pages/home.razor")]

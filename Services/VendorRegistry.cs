@@ -79,19 +79,14 @@ public static class VendorRegistry
             SpeedDef = new TtsParameterDef { Min = 0.5, Max = 2.0, Default = 1.0, Step = 0.1 },
             VolumeDef = new TtsParameterDef { IsSupported = false }, // 暂时不支持直接调音量
             SupportsModelFetch = false,
-            SupportsVoiceFetch = false,
+            SupportsVoiceFetch = true,
             DefaultModels = new()
             {
-                new VoiceModel { Id = "cosyvoice-v1", Name = "CosyVoice v1" },
-                new VoiceModel { Id = "cosyvoice-v2", Name = "CosyVoice v2" }
+                new VoiceModel { Id = "qwen3-tts-instruct-flash-2026-01-26", Name = "千问3-TTS-Instruct-Flash (2026-01-26)" }
             },
             DefaultVoices = new()
             {
-                new VoiceOption { Id = "longxiaochun", Name = "龙小淳 (女)", Gender = "女", Language = "中文" },
-                new VoiceOption { Id = "longlaotie", Name = "龙老铁 (男)", Gender = "男", Language = "中文" },
-                new VoiceOption { Id = "longshuo", Name = "龙硕 (男)", Gender = "男", Language = "中文" },
-                new VoiceOption { Id = "longshu", Name = "龙姝 (女)", Gender = "女", Language = "中文" },
-                new VoiceOption { Id = "longjielidou", Name = "龙杰力豆 (男童)", Gender = "男", Language = "中文" },
+                // 音色列表将通过主动获取（JSON）动态加载
             }
         },
         new VendorConfig

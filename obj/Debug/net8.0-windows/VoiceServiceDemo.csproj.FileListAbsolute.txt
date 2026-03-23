@@ -76,3 +76,5 @@ E:\AIMadeupTools\04_AILabs\AIVoice\VoiceServiceDemo\obj\Debug\net8.0-windows\ref
 E:\AIMadeupTools\04_AILabs\AIVoice\VoiceServiceDemo\obj\Debug\net8.0-windows\VoiceServiceDemo.pdb
 E:\AIMadeupTools\04_AILabs\AIVoice\VoiceServiceDemo\obj\Debug\net8.0-windows\VoiceServiceDemo.genruntimeconfig.cache
 E:\AIMadeupTools\04_AILabs\AIVoice\VoiceServiceDemo\obj\Debug\net8.0-windows\ref\VoiceServiceDemo.dll
+E:\AIMadeupTools\04_AILabs\AIVoice\VoiceServiceDemo\bin\Debug\net8.0-windows\aliyun_voices_raw.json
+E:\AIMadeupTools\04_AILabs\AIVoice\VoiceServiceDemo\obj\Debug\net8.0-windows\VoiceServiceDemo.sourcelink.json

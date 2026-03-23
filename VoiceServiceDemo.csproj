@@ -19,4 +19,10 @@
     <PackageReference Include="System.Text.Json" Version="8.0.*" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="aliyun_voices_raw.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

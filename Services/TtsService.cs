@@ -53,10 +53,11 @@ public class TtsService
     public async Task<List<VoiceOption>> FetchVoicesAsync(string vendorId)
     {
         var apiKey = _settingsService.GetApiKey(vendorId);
-        if (string.IsNullOrWhiteSpace(apiKey)) return new List<VoiceOption>();
+        if (vendorId != "aliyun" && string.IsNullOrWhiteSpace(apiKey)) return new List<VoiceOption>();
 
         try
         {
+            if (vendorId == "aliyun") return await FetchAliyunVoicesAsync();
             if (vendorId == "huoshan") return await FetchHuoshanVoicesAsync(apiKey);
             if (vendorId == "tencent") return await FetchTencentVoicesAsync(apiKey);
             return new List<VoiceOption>();
@@ -65,6 +66,111 @@ public class TtsService
         {
             return new List<VoiceOption>();
         }
+    }
+
+    private async Task<List<VoiceOption>> FetchAliyunVoicesAsync()
+    {
+        var options = new List<VoiceOption>();
+        try
+        {
+            // 阿里云没有公开的音色列表 API（控制台接口需要浏览器 session 认证），
+            // 因此从本地预置的 JSON 文件读取音色数据。
+            var jsonPath = Path.Combine(AppContext.BaseDirectory, "aliyun_voices_raw.json");
+            if (!File.Exists(jsonPath))
+                jsonPath = Path.Combine(Directory.GetCurrentDirectory(), "aliyun_voices_raw.json");
+            if (!File.Exists(jsonPath)) return options;
+
+            var json = await File.ReadAllTextAsync(jsonPath);
+            using var doc = JsonDocument.Parse(json);
+
+            // 解析结构: { "data": { "DataV2": { "data": { "data": { "voiceConfigList": [...] } } } } }
+            // 兼容旧结构: { "data": { "DataV2": { "data": { "data": [...] } } } }
+            if (doc.RootElement.TryGetProperty("data", out var dataWrapper) &&
+                dataWrapper.TryGetProperty("DataV2", out var dataV2) &&
+                dataV2.TryGetProperty("data", out var innerData) &&
+                innerData.TryGetProperty("data", out var dataContent))
+            {
+                JsonElement voiceArray;
+
+                // 新结构: data.data 是对象，包含 voiceConfigList
+                if (dataContent.ValueKind == JsonValueKind.Object &&
+                    dataContent.TryGetProperty("voiceConfigList", out var vcl))
+                {
+                    voiceArray = vcl;
+                }
+                // 旧结构: data.data 直接是数组
+                else if (dataContent.ValueKind == JsonValueKind.Array)
+                {
+                    voiceArray = dataContent;
+                }
+                else
+                {
+                    return options;
+                }
+
+                foreach (var item in voiceArray.EnumerateArray())
+                {
+                    // 过滤掉非阿里云原生模型（如 MiniMax）
+                    var modelId = TryGetStr(item, "defaultModelId") ?? "";
+                    if (modelId.StartsWith("MiniMax", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    if (item.TryGetProperty("ttsVoiceConfig", out var cfg))
+                    {
+                        ParseAliyunVoiceConfig(cfg, options);
+                    }
+                }
+            }
+
+            // 写入调试日志
+            try { await File.WriteAllTextAsync(Path.Combine(_settingsService.Settings.OutputDirectory, "aliyun_voices_debug.txt"), $"Loaded {options.Count} Aliyun voices from local JSON"); } catch { }
+        }
+        catch { }
+        return options;
+    }
+
+    /// <summary>
+    /// 解析单个阿里云音色配置
+    /// </summary>
+    private void ParseAliyunVoiceConfig(JsonElement cfg, List<VoiceOption> options)
+    {
+        var voiceId = TryGetStr(cfg, "voice") ?? "";
+        if (string.IsNullOrEmpty(voiceId) || options.Any(o => o.Id == voiceId)) return;
+
+        var name = TryGetStr(cfg, "name") ?? voiceId;
+        var profile = TryGetStr(cfg, "profile") ?? "";
+        var genderRaw = TryGetStr(cfg, "gender") ?? "";
+        var gender = "男";
+        if (genderRaw.Contains("女") || genderRaw.Contains("Female", StringComparison.OrdinalIgnoreCase))
+            gender = "女";
+
+        var langRaw = TryGetStr(cfg, "language") ?? "";
+        var lang = "中文";
+        if (langRaw.Contains("多语") || langRaw.Contains("中英") || langRaw.Contains("English"))
+            lang = "多语言";
+        if (langRaw.Contains("方言") || langRaw.Contains("Dialect"))
+            lang = "方言";
+        if (langRaw.Contains("小语种") || langRaw.Contains("Minority"))
+            lang = lang == "中文" ? "小语种" : lang;
+
+        var sampleUrl = TryGetStr(cfg, "illustrationAudio") ?? "";
+        var scenario = "";
+        if (cfg.TryGetProperty("scenario", out var sc))
+            scenario = TryGetStr(sc, "name") ?? "";
+
+        var displayName = !string.IsNullOrEmpty(profile)
+            ? $"{name} ({profile})"
+            : $"{name} ({gender})";
+
+        options.Add(new VoiceOption
+        {
+            Id = voiceId,
+            Name = displayName,
+            Gender = gender,
+            Language = lang,
+            SampleUrl = sampleUrl,
+            Categories = !string.IsNullOrEmpty(scenario) ? new List<string> { scenario } : new List<string>()
+        });
     }
 
     private async Task<List<VoiceOption>> FetchHuoshanVoicesAsync(string apiKey)
@@ -560,23 +666,85 @@ public class TtsService
     // ========== 阿里云 CosyVoice ==========
     private async Task<TtsResult> GenerateAliyunAsync(TtsRequest request, string apiKey)
     {
-        var body = new
-        {
-            model = request.ModelId,
-            input = new { text = request.Text },
-            parameters = new { voice = request.VoiceId }
-        };
+        HttpRequestMessage httpRequest;
 
-        var httpRequest = new HttpRequestMessage(HttpMethod.Post,
-            "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2audio/generation");
-        httpRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
-        httpRequest.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        // qwen3-tts 系列使用 multimodal-generation 端点
+        if (request.ModelId.StartsWith("qwen3-tts", StringComparison.OrdinalIgnoreCase))
+        {
+            var body = new
+            {
+                model = request.ModelId,
+                input = new
+                {
+                    text = request.Text,
+                    voice = request.VoiceId
+                }
+            };
+
+            httpRequest = new HttpRequestMessage(HttpMethod.Post,
+                "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation");
+            httpRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
+            httpRequest.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        }
+        else
+        {
+            // 旧版 qwen-tts / cosyvoice 使用 DashScope 原生端点
+            var body = new
+            {
+                model = request.ModelId,
+                input = new { text = request.Text },
+                parameters = new { voice = request.VoiceId }
+            };
+
+            httpRequest = new HttpRequestMessage(HttpMethod.Post,
+                "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2audio/generation");
+            httpRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
+            httpRequest.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        }
 
         var response = await _httpClient.SendAsync(httpRequest);
         if (!response.IsSuccessStatusCode)
         {
             var err = await response.Content.ReadAsStringAsync();
             return new TtsResult { Success = false, ErrorMessage = $"阿里云 API 错误 ({response.StatusCode}): {err}" };
+        }
+
+        // qwen3-tts 非流式返回 JSON（含音频 URL），需要额外下载
+        if (request.ModelId.StartsWith("qwen3-tts", StringComparison.OrdinalIgnoreCase))
+        {
+            var jsonStr = await response.Content.ReadAsStringAsync();
+            try
+            {
+                using var jDoc = JsonDocument.Parse(jsonStr);
+                var audioUrl = jDoc.RootElement
+                    .GetProperty("output")
+                    .GetProperty("audio")
+                    .GetProperty("url")
+                    .GetString();
+
+                if (string.IsNullOrEmpty(audioUrl))
+                    return new TtsResult { Success = false, ErrorMessage = "阿里云返回的音频 URL 为空" };
+
+                // 下载音频文件
+                var audioBytes = await _httpClient.GetByteArrayAsync(audioUrl);
+                var filePath = GetOutputFilePath("aliyun");
+                await File.WriteAllBytesAsync(filePath, audioBytes);
+
+                var vendor = VendorRegistry.GetById("aliyun");
+                return new TtsResult
+                {
+                    Success = true,
+                    FilePath = filePath,
+                    VendorName = vendor?.Name ?? "",
+                    ModelName = request.ModelId,
+                    VoiceName = request.VoiceId,
+                    Text = request.Text
+                };
+            }
+            catch (Exception ex)
+            {
+                return new TtsResult { Success = false, ErrorMessage = $"阿里云响应解析失败: {ex.Message}\n原始响应: {jsonStr}" };
+            }
         }
 
         return await SaveAudioResponse(response, request, "aliyun");
