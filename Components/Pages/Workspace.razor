@@ -8,7 +8,8 @@
 
 <style>
     .main-content {
-        overflow: hidden !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
         padding: clamp(12px, 2vh, 24px) clamp(16px, 4vw, 32px) !important;
         gap: 0 !important;
     }
@@ -47,7 +48,7 @@
                         <label>&nbsp;</label>
                         <button class="btn btn-outline" style="padding:10px 16px; font-size:13px; white-space:nowrap;" @onclick="FetchVoices" disabled="@_isFetchingVoices">
                             @if (_isFetchingVoices) { <span class="spinner" style="width:14px;height:14px;border-width:2px;margin-right:6px;"></span> <span>获取中…</span> }
-                            else { <span>🔄 获取全量音色库</span> }
+                            else { <span>刷新全量音色库</span> }
                         </button>
                     </div>
                 }
@@ -75,13 +76,13 @@
             {
                 <!-- 统计 & 搜索框 -->
                 <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom: 12px;">
-                    <span style="font-size:14px; color:var(--text-secondary);">共 <strong style="color:var(--text-primary);">@_allVoices.Count</strong> 个音色</span>
+                    <span style="font-size:14px; color:var(--text-secondary);">显示 <strong style="color:var(--text-primary);">@FilteredVoiceCount</strong> / <strong style="color:var(--text-primary);">@_allVoices.Count</strong> 个音色</span>
                     <div style="flex:1; max-width:360px; position:relative;">
                         <input class="form-input" type="text" placeholder="🔍 搜索音色名称…" @bind="_searchText" @bind:event="oninput" style="padding-left:16px; font-size:13px;" />
                     </div>
-                    @if (!string.IsNullOrEmpty(_lastUpdateTimeStr))
+                    @if (!string.IsNullOrEmpty(_voiceListStatus))
                     {
-                        <span style="font-size:12px; color:var(--text-muted); margin-left:auto;">上次数据更新时间：@_lastUpdateTimeStr</span>
+                        <span class="voice-source-note">@_voiceListStatus</span>
                     }
                 </div>
 
@@ -97,6 +98,10 @@
                     <button class="@($"filter-chip {(_filterGender == "" ? "active" : "")}")" @onclick="@(() => _filterGender = "")">全部</button>
                     <button class="@($"filter-chip {(_filterGender == "男" ? "active" : "")}")" @onclick="@(() => _filterGender = "男")">♂ 男</button>
                     <button class="@($"filter-chip {(_filterGender == "女" ? "active" : "")}")" @onclick="@(() => _filterGender = "女")">♀ 女</button>
+                    @if (HasActiveVoiceFilters)
+                    {
+                        <button class="filter-chip filter-clear" @onclick="ClearVoiceFilters">清空筛选</button>
+                    }
                 </div>
 
                 <!-- 卡片网格 (充满剩余空间) -->
@@ -112,8 +117,12 @@
                                 </div>
                                 @if (!string.IsNullOrEmpty(v.SampleUrl))
                                 {
-                                    <button class="voice-demo-btn" title="试听" @onclick="@(e => ToggleDemoAudio(v))" @onclick:stopPropagation="true">
-                                        @if (_playingDemoVoiceId == v.Id)
+                                    <button class="voice-demo-btn" title="试听" disabled="@(_loadingDemoVoiceId == v.Id)" @onclick="@(e => ToggleDemoAudio(v))" @onclick:stopPropagation="true">
+                                        @if (_loadingDemoVoiceId == v.Id)
+                                        {
+                                            <span class="spinner voice-demo-spinner"></span>
+                                        }
+                                        else if (_playingDemoVoiceId == v.Id)
                                         {
                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style="width:12px; height:12px;"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
                                         }
@@ -190,37 +199,48 @@
             }
 
             <!-- 语速与音量调节 -->
-            <div class="voice-sliders" style="display: flex; gap: 24px; margin-bottom: 16px;">
-                <div class="slider-group" style="flex: 1;">
-                    <div class="slider-header" style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span class="slider-label" style="font-size: 14px; font-weight: 500; color: #555;">语速</span>
-                        <span class="slider-value" style="font-size: 14px; font-family: monospace; color: #0078d4;">@_speed</span>
+            <div class="voice-sliders">
+                @if (_vendor.SpeedDef.IsSupported)
+                {
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span class="slider-label">语速</span>
+                        <span class="slider-value">@_speed</span>
                     </div>
                     <input type="range" class="win-slider" 
                            min="@_vendor.SpeedDef.Min" 
                            max="@_vendor.SpeedDef.Max" 
-                           step="0.1" 
+                           step="@_vendor.SpeedDef.Step"
                            @bind="_speed" 
                            @bind:event="oninput" />
                 </div>
+                }
                 
-                <div class="slider-group" style="flex: 1;">
-                    <div class="slider-header" style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span class="slider-label" style="font-size: 14px; font-weight: 500; color: #555;">音量</span>
-                        <span class="slider-value" style="font-size: 14px; font-family: monospace; color: #0078d4;">@_volume</span>
+                @if (_vendor.VolumeDef.IsSupported)
+                {
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span class="slider-label">音量</span>
+                        <span class="slider-value">@_volume</span>
                     </div>
                     <input type="range" class="win-slider" 
                            min="@_vendor.VolumeDef.Min" 
                            max="@_vendor.VolumeDef.Max" 
-                           step="1" 
+                           step="@_vendor.VolumeDef.Step"
                            @bind="_volume" 
                            @bind:event="oninput" />
                 </div>
+                }
             </div>
 
             <!-- 文本输入 -->
             <div class="form-group">
                 <textarea class="text-area" placeholder="在此输入您想要转换成语音的测试文本内容…" @bind="_inputText"></textarea>
+            </div>
+
+            <div class="@($"generation-readiness {(CanGenerate ? "ready" : "blocked")}")">
+                <span>@GenerateReadinessMessage</span>
+                <span>@InputTextLength 字</span>
             </div>
 
             <!-- 操作按钮 -->
@@ -233,7 +253,7 @@
                     </a>
                 }
                 <button class="btn btn-outline" @onclick="ClearText" disabled="@_isGenerating">清空</button>
-                <button class="btn btn-primary" @onclick="Generate" disabled="@(_isGenerating || string.IsNullOrWhiteSpace(_inputText) || string.IsNullOrEmpty(_selectedVoiceId))">
+                <button class="btn btn-primary" @onclick="Generate" disabled="@(!CanGenerate)" title="@GenerateReadinessMessage">
                     @if (_isGenerating)
                     {
                         <span class="spinner" style="width:16px;height:16px;border-width:2px;"></span>
@@ -250,7 +270,17 @@
             <!-- 错误信息 -->
             @if (!string.IsNullOrEmpty(_errorMessage))
             {
-                <div class="error-msg">@_errorMessage</div>
+                var friendlyError = GetFriendlyErrorMessage(_errorMessage);
+                <div class="error-msg">
+                    <div>@friendlyError</div>
+                    @if (!string.Equals(friendlyError, _errorMessage, StringComparison.Ordinal))
+                    {
+                        <details class="error-details">
+                            <summary>查看技术详情</summary>
+                            <pre>@_errorMessage</pre>
+                        </details>
+                    }
+                </div>
             }
 
     <!-- ========== 生成结果区 ========== -->
@@ -310,6 +340,11 @@
     }
 </div>
 
+@if (!string.IsNullOrEmpty(_statusMessage))
+{
+    <div class="toast @($"toast-{_statusKind}")">@_statusMessage</div>
+}
+
 @code {
     [Parameter] public string VendorId { get; set; } = "";
 
@@ -335,6 +370,9 @@
     private bool _audioLoaded = false;
     private string _audioFileName = "";
     private string _audioFileSize = "";
+    private string? _statusMessage;
+    private string _statusKind = "info";
+    private System.Threading.CancellationTokenSource? _statusCts;
 
     private DotNetObjectReference<Workspace>? _dotNetRef;
 
@@ -377,6 +415,7 @@
     }
 
     private string _playingDemoVoiceId = "";
+    private string _loadingDemoVoiceId = "";
 
     private async Task ToggleDemoAudio(VoiceOption v)
     {
@@ -385,7 +424,7 @@
             if (_playingDemoVoiceId == v.Id)
             {
                 // 暂停当前试听
-                await JS.InvokeVoidAsync("eval", "document.getElementById('demoAudioPlayer').pause();");
+                await JS.InvokeVoidAsync("demoAudioInterop.pause");
                 _playingDemoVoiceId = "";
                 return;
             }
@@ -393,7 +432,8 @@
             var sampleUrl = v.SampleUrl;
             if (string.IsNullOrEmpty(sampleUrl)) return;
 
-            _playingDemoVoiceId = v.Id;
+            _playingDemoVoiceId = "";
+            _loadingDemoVoiceId = v.Id;
             StateHasChanged();
 
             // 服务端代理下载音频（绕过 COS 防盗链）
@@ -408,19 +448,24 @@
 
             // 用 data URI 播放
             var dataUri = $"data:{mimeType};base64,{base64}";
-            
-            // 使用参数传递，避免字符串插值导致的转义和编码问题
-            await JS.InvokeVoidAsync("eval", $"(function(src){{ var player = document.getElementById('demoAudioPlayer'); player.pause(); player.src = src; player.onended = function(){{ DotNet.invokeMethodAsync('VoiceServiceDemo', 'OnDemoAudioEnded'); }}; player.onerror = function(){{ DotNet.invokeMethodAsync('VoiceServiceDemo', 'OnDemoAudioEnded'); }}; player.play().catch(function(){{ DotNet.invokeMethodAsync('VoiceServiceDemo', 'OnDemoAudioEnded'); }}); }})('{dataUri.Substring(0, Math.Min(dataUri.Length, 15))}' + '{dataUri.Substring(Math.Min(dataUri.Length, 15))}')");
+            _loadingDemoVoiceId = "";
+            _playingDemoVoiceId = v.Id;
+            StateHasChanged();
+            await JS.InvokeVoidAsync("demoAudioInterop.play", dataUri, _dotNetRef);
         }
-        catch
+        catch (Exception ex)
         {
+            _loadingDemoVoiceId = "";
             _playingDemoVoiceId = "";
+            ShowStatus($"试听失败: {ex.Message}", "error");
+            StateHasChanged();
         }
     }
 
     [JSInvokable]
     public void OnDemoAudioEnded()
     {
+        _loadingDemoVoiceId = "";
         _playingDemoVoiceId = "";
         InvokeAsync(StateHasChanged);
     }
@@ -437,6 +482,8 @@
             
             // 显示成功状态
             _copiedVoiceId = voiceId;
+            ShowStatus($"已复制音色 ID: {voiceId}", "success");
+            StateHasChanged();
             
             // 取消之前的重置任务
             _copyResetCts?.Cancel();
@@ -451,10 +498,10 @@
             }
             catch (TaskCanceledException) { }
         }
-        catch
+        catch (Exception ex)
         {
-            // 复制失败，可以在这里添加错误提示
             _copiedVoiceId = "";
+            ShowStatus($"复制失败: {ex.Message}", "error");
         }
     }
 
@@ -463,7 +510,21 @@
         _filterCategory = _filterCategory == cat ? "" : cat;
     }
 
-    private string _lastUpdateTimeStr = "";
+    private int FilteredVoiceCount => FilteredVoices.Count();
+
+    private bool HasActiveVoiceFilters =>
+        !string.IsNullOrWhiteSpace(_searchText) ||
+        !string.IsNullOrEmpty(_filterCategory) ||
+        !string.IsNullOrEmpty(_filterGender);
+
+    private void ClearVoiceFilters()
+    {
+        _searchText = "";
+        _filterCategory = "";
+        _filterGender = "";
+    }
+
+    private string _voiceListStatus = "";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -479,7 +540,8 @@
                 _allVoices = new();
                 _selectedVoiceId = "";
                 _selectedVoiceName = "";
-                _lastUpdateTimeStr = "";
+                _voiceListStatus = "";
+                var loadedVoices = false;
 
                 try
                 {
@@ -491,27 +553,56 @@
                         var cached = System.Text.Json.JsonSerializer.Deserialize<List<VoiceOption>>(json);
                         if (cached != null && cached.Any())
                         {
-                            _allVoices = cached;
-                            _allCategories = _allVoices.SelectMany(v => v.Categories).Distinct().ToList();
-                            _selectedVoiceId = _allVoices.First().Id;
-                            _selectedVoiceName = _allVoices.First().Name;
-                            _lastUpdateTimeStr = File.GetLastWriteTime(cacheFile).ToString("yy-MM-dd HH:mm");
+                            ApplyVoiceList(cached, $"使用本地缓存音色库，更新时间 {File.GetLastWriteTime(cacheFile):yy-MM-dd HH:mm}");
+                            loadedVoices = true;
                         }
                     }
                 }
                 catch { }
+
+                if (!loadedVoices && _vendor.Id == "aliyun")
+                {
+                    var localVoices = await TtsService.FetchVoicesAsync(_vendor.Id);
+                    if (localVoices.Any())
+                    {
+                        ApplyVoiceList(localVoices, "使用本地预置音色库");
+                        loadedVoices = true;
+                    }
+                }
+
+                if (!loadedVoices && _vendor.DefaultVoices.Any())
+                {
+                    ApplyVoiceList(_vendor.DefaultVoices.ToList(), "使用内置推荐音色，可刷新获取全量音色库");
+                }
             }
             else
             {
-                _allVoices = _vendor.DefaultVoices.ToList();
-                if (_allVoices.Any())
-                {
-                    _selectedVoiceId = _allVoices.First().Id;
-                    _selectedVoiceName = _allVoices.First().Name;
-                }
-                _lastUpdateTimeStr = "";
+                ApplyVoiceList(_vendor.DefaultVoices.ToList(), "使用内置音色列表");
             }
             _selectedModelId = _vendor.DefaultModels.FirstOrDefault()?.Id ?? "";
+        }
+    }
+
+    private void ApplyVoiceList(List<VoiceOption> voices, string status)
+    {
+        _allVoices = voices;
+        _allCategories = _allVoices.SelectMany(v => v.Categories).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().ToList();
+        _voiceListStatus = status;
+        EnsureSelectedVoice();
+    }
+
+    private void EnsureSelectedVoice()
+    {
+        if (!_allVoices.Any())
+        {
+            _selectedVoiceId = "";
+            _selectedVoiceName = "";
+            return;
+        }
+
+        if (!_allVoices.Any(v => v.Id == _selectedVoiceId && v.Name == _selectedVoiceName))
+        {
+            SelectVoice(_allVoices.First());
         }
     }
 
@@ -525,15 +616,7 @@
         var fetched = await TtsService.FetchVoicesAsync(_vendor.Id);
         if (fetched.Any())
         {
-            _allVoices = fetched;
-            // 收集所有分类标签
-            _allCategories = _allVoices.SelectMany(v => v.Categories).Distinct().ToList();
-            // 如果之前选中的不在新列表中，选中第一个
-            if (!_allVoices.Any(v => v.Id == _selectedVoiceId))
-            {
-                _selectedVoiceId = _allVoices.First().Id;
-                _selectedVoiceName = _allVoices.First().Name;
-            }
+            ApplyVoiceList(fetched, $"已刷新全量音色库，更新时间 {DateTime.Now:yy-MM-dd HH:mm}");
 
             // 保存到本地缓存
             try
@@ -543,13 +626,15 @@
                 var cacheFile = Path.Combine(cacheDir, $"voices_{_vendor.Id}.json");
                 var json = System.Text.Json.JsonSerializer.Serialize(_allVoices);
                 await File.WriteAllTextAsync(cacheFile, json);
-                _lastUpdateTimeStr = DateTime.Now.ToString("yy-MM-dd HH:mm");
             }
             catch { }
+
+            ShowStatus($"已加载 {_allVoices.Count} 个音色", "success");
         }
         else
         {
             _errorMessage = "未能获取到任何在线音色。请检查您的 AK/SK 凭证是否填写并且有有效权限。";
+            ShowStatus("音色库刷新失败", "error");
         }
 
         _isFetchingVoices = false;
@@ -639,10 +724,12 @@
             await JS.InvokeVoidAsync("audioInterop.startUpdates", _dotNetRef);
             _isPlaying = true;
             _audioLoaded = true;
+            ShowStatus("语音已生成并开始播放", "success");
         }
         catch (Exception ex)
         {
             _errorMessage = $"加载音频到播放器失败: {ex.Message}";
+            ShowStatus("播放器加载失败", "error");
         }
 
         _isGenerating = false;
@@ -695,8 +782,15 @@
     {
         if (_result?.FilePath != null && File.Exists(_result.FilePath))
         {
-            try { System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{_result.FilePath}\""); }
-            catch { }
+            try
+            {
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{_result.FilePath}\"");
+                ShowStatus("已打开音频所在文件夹", "success");
+            }
+            catch (Exception ex)
+            {
+                ShowStatus($"打开文件夹失败: {ex.Message}", "error");
+            }
         }
     }
 
@@ -724,6 +818,7 @@
                     File.Delete(_result.FilePath);
                     _result.FilePath = destPath;
                     _audioFileName = Path.GetFileName(destPath);
+                    ShowStatus("音频已移动到新位置", "success");
                     StateHasChanged();
                 }
             }
@@ -731,6 +826,7 @@
         catch (Exception ex)
         {
             _errorMessage = $"移动文件失败: {ex.Message}";
+            ShowStatus("移动文件失败", "error");
             StateHasChanged();
         }
     }
@@ -764,8 +860,74 @@
         return $"{bytes / (1024.0 * 1024.0):F2} MB";
     }
 
+    private int InputTextLength => string.IsNullOrWhiteSpace(_inputText) ? 0 : _inputText.Trim().Length;
+
+    private bool CanGenerate =>
+        !_isGenerating &&
+        _vendor != null &&
+        _selectedVoice != null &&
+        !string.IsNullOrWhiteSpace(_inputText);
+
+    private string GenerateReadinessMessage
+    {
+        get
+        {
+            if (_isGenerating) return "正在生成语音，请稍候";
+            if (_vendor == null) return "当前厂商不可用";
+            if (_selectedVoice == null) return "请先选择一个音色";
+            if (string.IsNullOrWhiteSpace(_inputText)) return "请输入要合成的文本";
+            return $"准备使用 {_selectedVoice.Name} 生成语音";
+        }
+    }
+
+    private string GetFriendlyErrorMessage(string message)
+    {
+        var lower = message.ToLowerInvariant();
+        if (lower.Contains("api key") || message.Contains("鉴权") || lower.Contains("unauthorized") || lower.Contains("forbidden"))
+            return "凭证可能无效或权限不足。请回到系统设置检查该厂商的 API Key，并使用“测试连通”确认。";
+        if (lower.Contains("timeout") || message.Contains("连接失败") || message.Contains("网络"))
+            return "网络请求没有完成。请检查网络连接、代理设置，或稍后重试。";
+        if (message.Contains("格式") || lower.Contains("format"))
+            return "当前输入格式不符合厂商要求。请检查凭证格式、音色 ID 或文本内容。";
+        if (message.Contains("额度") || lower.Contains("quota") || lower.Contains("limit"))
+            return "服务额度或频率可能受限。请检查厂商控制台的额度、计费或调用限制。";
+        if (message.Contains("文件") || lower.Contains("file"))
+            return "音频文件处理失败。请检查输出目录是否存在、是否有写入权限。";
+        return "操作没有完成。请检查配置、网络或厂商服务状态后重试。";
+    }
+
+    private void ShowStatus(string message, string kind = "info")
+    {
+        _statusCts?.Cancel();
+        _statusCts = new System.Threading.CancellationTokenSource();
+        var token = _statusCts.Token;
+
+        _statusMessage = message;
+        _statusKind = kind;
+        StateHasChanged();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(2400, token);
+                await InvokeAsync(() =>
+                {
+                    if (!token.IsCancellationRequested)
+                    {
+                        _statusMessage = null;
+                        StateHasChanged();
+                    }
+                });
+            }
+            catch (TaskCanceledException) { }
+        });
+    }
+
     public void Dispose()
     {
+        _statusCts?.Cancel();
+        _copyResetCts?.Cancel();
         _dotNetRef?.Dispose();
     }
 }

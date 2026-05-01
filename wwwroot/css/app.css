@@ -481,6 +481,7 @@ html, body, #app {
     display: flex;
     flex-direction: column;
     height: 100%;
+    min-height: 0;
     gap: clamp(12px, 2vh, 20px);
 }
 
@@ -493,7 +494,7 @@ html, body, #app {
 
 .ws-body {
     flex: 1;
-    min-height: 0; /* 这是让 flex 子元素由于内容过多收缩的核心 */
+    min-height: clamp(220px, 34vh, 420px);
     display: flex;
     flex-direction: column;
     border: 1px solid var(--border);
@@ -513,7 +514,8 @@ html, body, #app {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 10px;
-    height: 100%; /* Fill .ws-body */
+    flex: 1 1 auto;
+    min-height: 180px;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 4px;
@@ -604,6 +606,17 @@ html, body, #app {
     border-color: var(--accent);
 }
 
+.voice-demo-btn:disabled {
+    opacity: 0.75;
+    cursor: wait;
+}
+
+.voice-demo-spinner {
+    width: 13px;
+    height: 13px;
+    border-width: 2px;
+}
+
 .voice-copy-btn {
     width: 32px;
     height: 32px;
@@ -685,6 +698,16 @@ html, body, #app {
     font-weight: 500;
 }
 
+.filter-chip.filter-clear {
+    border-color: #5c2020;
+    color: #fca5a5;
+}
+
+.filter-chip.filter-clear:hover {
+    background: #2a1515;
+    color: #fecaca;
+}
+
 /* 已选音色详情条 */
 .voice-detail-bar {
     display: flex;
@@ -695,6 +718,97 @@ html, body, #app {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
+}
+
+.voice-source-note {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+
+.voice-sliders {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 16px;
+}
+
+.generation-readiness {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.generation-readiness.ready {
+    border-color: #2d5a2d;
+    color: #86efac;
+    background: #14251a;
+}
+
+.generation-readiness.blocked {
+    border-color: #4a3520;
+    color: #fbbf24;
+    background: #241a10;
+}
+
+.slider-group {
+    flex: 1;
+    min-width: 180px;
+}
+
+.slider-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.slider-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.slider-value {
+    font-size: 14px;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+}
+
+.win-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: var(--bg-elevated);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.win-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    border: 2px solid var(--bg-primary);
+    box-shadow: 0 0 0 1px var(--border-hover);
+}
+
+.win-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    border: 2px solid var(--bg-primary);
+    box-shadow: 0 0 0 1px var(--border-hover);
 }
 
 .download-btn {
@@ -748,6 +862,11 @@ html, body, #app {
 
 .settings-row:last-child {
     border-bottom: none;
+}
+
+.settings-row.focused {
+    background: rgba(250, 250, 250, 0.06);
+    box-shadow: inset 3px 0 0 var(--text-primary);
 }
 
 .settings-row .row-label {
@@ -847,6 +966,121 @@ html, body, #app {
     border-radius: var(--radius-md);
     font-size: 14px;
     line-height: 1.5;
+}
+
+.error-details {
+    margin-top: 10px;
+    color: #fecaca;
+}
+
+.error-details summary {
+    cursor: pointer;
+    color: #fca5a5;
+    font-size: 13px;
+}
+
+.error-details pre {
+    margin-top: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: #fecaca;
+}
+
+.toast {
+    position: fixed;
+    right: 32px;
+    bottom: 32px;
+    max-width: min(420px, calc(100vw - 64px));
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-hover);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.4;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    z-index: 999;
+}
+
+.toast-success {
+    background: #14251a;
+    border-color: #2d5a2d;
+    color: #86efac;
+}
+
+.toast-error {
+    background: #2a1515;
+    border-color: #5c2020;
+    color: #fca5a5;
+}
+
+/* ============================
+   Compact workspace safeguards
+   ============================ */
+
+@media (max-height: 780px) {
+    .workspace-layout {
+        gap: 10px;
+    }
+
+    .ws-header {
+        gap: 8px;
+    }
+
+    .ws-body {
+        min-height: clamp(220px, 42vh, 360px);
+        padding: 10px;
+    }
+
+    .voice-card-grid {
+        min-height: 170px;
+    }
+
+    .page-header {
+        gap: 6px;
+    }
+
+    .page-header h2 {
+        font-size: 26px;
+    }
+
+    .page-header p {
+        font-size: 13px;
+    }
+
+    .voice-detail-bar {
+        padding: 10px 14px;
+    }
+
+    .voice-sliders {
+        gap: 16px;
+        margin-bottom: 8px;
+    }
+
+    .text-area {
+        min-height: 76px;
+        padding: 12px 14px;
+    }
+
+    .audio-player {
+        padding: 12px 14px;
+    }
+
+    .generation-readiness {
+        padding: 8px 10px;
+    }
+}
+
+@media (max-height: 640px) {
+    .ws-body {
+        min-height: 220px;
+    }
+
+    .voice-card-grid {
+        min-height: 150px;
+    }
 }
 
 /* ============================

@@ -1,9 +1,11 @@
 ﻿using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
+using System.Runtime.Versioning;
 using VoiceServiceDemo.Services;
 
 namespace VoiceServiceDemo;
 
+[SupportedOSPlatform("windows7.0")]
 public partial class MainWindow : Window
 {
     public MainWindow()
