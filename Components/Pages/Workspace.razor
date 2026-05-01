@@ -16,22 +16,16 @@
 </style>
 
 <div class="workspace-layout">
-    
-    <!-- ========== 顶部区: 头部信息 & 模型选择 ========== -->
-    <div class="ws-header">
-        <div class="page-header">
+    <div class="workspace-topbar">
+        <div class="page-header workspace-title">
             <h2>@(_vendor?.Name ?? "未知厂商") — 语音生成与测试</h2>
             <p>@(_vendor?.Description ?? "")</p>
         </div>
 
-        @if (_vendor == null)
+        @if (_vendor != null)
         {
-            <div class="error-msg">找不到该厂商的配置信息。</div>
-        }
-        else
-        {
-            <div class="controls-row">
-                <div class="form-group">
+            <div class="workspace-actions">
+                <div class="form-group model-picker">
                     <label>模型版本</label>
                     <div class="select-wrapper">
                         <select class="form-select" @bind="_selectedModelId">
@@ -42,79 +36,107 @@
                         </select>
                     </div>
                 </div>
+
                 @if (_vendor.SupportsVoiceFetch)
                 {
-                    <div class="form-group" style="flex:0 0 auto;">
-                        <label>&nbsp;</label>
-                        <button class="btn btn-outline" style="padding:10px 16px; font-size:13px; white-space:nowrap;" @onclick="FetchVoices" disabled="@_isFetchingVoices">
-                            @if (_isFetchingVoices) { <span class="spinner" style="width:14px;height:14px;border-width:2px;margin-right:6px;"></span> <span>获取中…</span> }
-                            else { <span>刷新全量音色库</span> }
-                        </button>
-                    </div>
+                    <button class="btn btn-outline" @onclick="FetchVoices" disabled="@_isFetchingVoices">
+                        @if (_isFetchingVoices)
+                        {
+                            <span class="spinner" style="width:14px;height:14px;border-width:2px;"></span>
+                            <span>获取中…</span>
+                        }
+                        else
+                        {
+                            <span>刷新音色库</span>
+                        }
+                    </button>
                 }
-                @if (_vendor.Id == "aliyun")
+
+                @if (!string.IsNullOrEmpty(_vendor.DocumentationUrl))
                 {
-                    <div class="form-group" style="flex:0 0 auto; align-self:flex-end;">
-                        <span style="font-size:11px; color:var(--text-muted); line-height:1.4;">
-                            ⚠️ 阿里云暂不支持 API 动态获取音色，数据来自本地预置文件。
-                            <a href="https://bailian.console.aliyun.com/cn-beijing?tab=model#/efm/model_experience_center/voice?currentTab=voiceTts"
-                               target="_blank" style="color:var(--accent); text-decoration:underline; cursor:pointer;">
-                                前往控制台手动获取 →
-                            </a>
-                        </span>
-                    </div>
+                    <a href="@_vendor.DocumentationUrl" target="_blank" class="btn btn-outline doc-link">
+                        <svg style="width:16px;height:16px;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                        官方文档
+                    </a>
                 }
             </div>
         }
     </div>
 
-    @if (_vendor != null)
+    @if (_vendor == null)
     {
-        <!-- ========== 中间区: 音色浏览器 (占据剩余所有空间并滚动) ========== -->
-        <div class="ws-body">
+        <div class="error-msg">找不到该厂商的配置信息。</div>
+    }
+    else
+    {
+        @if (_vendor.Id == "aliyun")
+        {
+            <div class="vendor-note">
+                阿里云暂不支持 API 动态获取音色，当前数据来自本地预置文件。
+                <a href="https://bailian.console.aliyun.com/cn-beijing?tab=model#/efm/model_experience_center/voice?currentTab=voiceTts"
+                   target="_blank">前往控制台手动获取</a>
+            </div>
+        }
+
+        <div class="workspace-main-grid">
+        <div class="voice-main-column">
+        <section class="voice-stage">
+            <div class="section-heading voice-stage-heading">
+                <div>
+                    <span class="eyebrow">Voice Library</span>
+                    <h3>选择音色</h3>
+                    <p>固定分页浏览，试听后直接在右侧生成测试语音。</p>
+                </div>
+                <div class="voice-stage-stats">
+                    <span class="voice-count">
+                        匹配 <strong>@FilteredVoiceCount</strong> / @_allVoices.Count
+                    </span>
+                    @if (FilteredVoiceCount > VoicePageSize)
+                    {
+                        <span class="voice-page-pill">@VoiceRangeLabel</span>
+                    }
+                </div>
+            </div>
+
             @if (_allVoices.Any())
             {
-                <!-- 统计 & 搜索框 -->
-                <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom: 12px;">
-                    <span style="font-size:14px; color:var(--text-secondary);">显示 <strong style="color:var(--text-primary);">@FilteredVoiceCount</strong> / <strong style="color:var(--text-primary);">@_allVoices.Count</strong> 个音色</span>
-                    <div style="flex:1; max-width:360px; position:relative;">
-                        <input class="form-input" type="text" placeholder="🔍 搜索音色名称…" @bind="_searchText" @bind:event="oninput" style="padding-left:16px; font-size:13px;" />
-                    </div>
+                <div class="voice-toolbar">
+                    <input class="form-input voice-search" type="text" placeholder="搜索音色名称或 ID…" value="@_searchText" @oninput="OnVoiceSearchChanged" />
                     @if (!string.IsNullOrEmpty(_voiceListStatus))
                     {
                         <span class="voice-source-note">@_voiceListStatus</span>
                     }
                 </div>
 
-                <!-- 筛选条件 -->
-                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom: 12px;">
-                    <!-- 分类筛选 -->
-                    @foreach (var cat in _allCategories)
-                    {
-                        <button class="@($"filter-chip {(_filterCategory == cat ? "active" : "")}")" @onclick="@(() => ToggleCategoryFilter(cat))">@cat</button>
-                    }
-                    <span style="width:1px; height:20px; background:var(--border); margin:0 4px;"></span>
-                    <!-- 性别筛选 -->
-                    <button class="@($"filter-chip {(_filterGender == "" ? "active" : "")}")" @onclick="@(() => _filterGender = "")">全部</button>
-                    <button class="@($"filter-chip {(_filterGender == "男" ? "active" : "")}")" @onclick="@(() => _filterGender = "男")">♂ 男</button>
-                    <button class="@($"filter-chip {(_filterGender == "女" ? "active" : "")}")" @onclick="@(() => _filterGender = "女")">♀ 女</button>
-                    @if (HasActiveVoiceFilters)
-                    {
-                        <button class="filter-chip filter-clear" @onclick="ClearVoiceFilters">清空筛选</button>
-                    }
+                <div class="voice-filter-panel">
+                    <div class="filter-strip category-filter-strip">
+                        @foreach (var cat in _allCategories)
+                        {
+                            <button class="@($"filter-chip {(_filterCategory == cat ? "active" : "")}")" @onclick="@(() => ToggleCategoryFilter(cat))">@cat</button>
+                        }
+                    </div>
+                    <div class="gender-filter-strip">
+                        <button class="@($"filter-chip {(_filterGender == "" ? "active" : "")}")" @onclick="@(() => SetGenderFilter(""))">全部</button>
+                        <button class="@($"filter-chip {(_filterGender == "男" ? "active" : "")}")" @onclick="@(() => SetGenderFilter("男"))">男声</button>
+                        <button class="@($"filter-chip {(_filterGender == "女" ? "active" : "")}")" @onclick="@(() => SetGenderFilter("女"))">女声</button>
+                        @if (HasActiveVoiceFilters)
+                        {
+                            <button class="filter-chip filter-clear" @onclick="ClearVoiceFilters">清空筛选</button>
+                        }
+                    </div>
                 </div>
 
-                <!-- 卡片网格 (充满剩余空间) -->
                 <div class="voice-card-grid">
-                    @foreach (var v in FilteredVoices)
+                    @foreach (var v in PagedVoices)
                     {
                         <div class="@($"voice-card {(_selectedVoiceId == v.Id && _selectedVoiceName == v.Name ? "selected" : "")}")" @onclick="@(() => SelectVoice(v))">
-                            <div class="voice-card-top">
-                                <div class="voice-avatar">@(v.Gender == "女" ? "👩" : "👨")</div>
-                                <div class="voice-card-info">
-                                    <span class="voice-card-name">@v.Name</span>
-                                    <span class="voice-card-meta">@v.Gender · @v.Age</span>
-                                </div>
+                            <div class="voice-card-chrome">
+                                <span class="@($"voice-avatar {(v.Gender == "女" ? "female" : "male")}")">@(v.Gender == "女" ? "女" : "男")</span>
+                                @if (_selectedVoiceId == v.Id && _selectedVoiceName == v.Name)
+                                {
+                                    <span class="selected-badge">已选</span>
+                                }
+                                <div class="voice-card-actions">
                                 @if (!string.IsNullOrEmpty(v.SampleUrl))
                                 {
                                     <button class="voice-demo-btn" title="试听" disabled="@(_loadingDemoVoiceId == v.Id)" @onclick="@(e => ToggleDemoAudio(v))" @onclick:stopPropagation="true">
@@ -142,9 +164,14 @@
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px; height:12px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                                     }
                                 </button>
+                                </div>
+                            </div>
+                            <div class="voice-card-info">
+                                <span class="voice-card-name" title="@v.Name">@v.Name</span>
+                                <span class="voice-card-meta">@FormatVoiceMeta(v)</span>
                             </div>
                             <div class="voice-card-tags">
-                                @foreach (var c in v.Categories.Take(3))
+                                @foreach (var c in v.Categories.Take(2))
                                 {
                                     <span class="voice-tag">@c</span>
                                 }
@@ -157,35 +184,59 @@
                     }
                     @if (!FilteredVoices.Any())
                     {
-                        <div style="grid-column: 1/-1; text-align:center; padding:32px; color:var(--text-muted);">
-                            没有找到匹配的音色
-                        </div>
+                        <div class="empty-state">没有找到匹配的音色</div>
+                    }
+                    else
+                    {
+                        @for (var i = 0; i < EmptyVoiceSlots; i++)
+                        {
+                            <div class="voice-card voice-card-placeholder" aria-hidden="true"></div>
+                        }
                     }
                 </div>
 
-                <!-- 试听音频播放器（隐藏的 HTML audio 元素） -->
+                @if (FilteredVoiceCount > VoicePageSize)
+                {
+                    <div class="voice-pagination">
+                        <span>每页 36 个音色</span>
+                        <div class="pagination-buttons">
+                            <button class="btn btn-outline" @onclick="PreviousVoicePage" disabled="@(_voicePageIndex == 0)">上一页</button>
+                            <span>@(_voicePageIndex + 1) / @VoiceTotalPages</span>
+                            <button class="btn btn-outline" @onclick="NextVoicePage" disabled="@(_voicePageIndex >= VoiceTotalPages - 1)">下一页</button>
+                        </div>
+                    </div>
+                }
+
                 <audio id="demoAudioPlayer" style="display:none;" />
             }
             else if (!_isFetchingVoices && _vendor.SupportsVoiceFetch)
             {
-                <div style="text-align:center; padding:48px 0; color:var(--text-muted); font-size:14px; margin: auto;">
-                    点击上方「获取全量音色库」按钮以加载音色列表
-                </div>
+                <div class="empty-state">点击上方“刷新音色库”加载音色列表</div>
             }
+        </section>
         </div>
 
-        <!-- ========== 底部区: 文本输入 & 操作按钮 ========== -->
-        <div class="ws-footer">
-            
-            <!-- 已选音色详情 & 情感选择 -->
+        <aside class="generation-sidebar">
+        <section class="generation-panel">
+            <div class="section-heading">
+                <div>
+                    <span class="eyebrow">Control Panel</span>
+                    <h3>生成设置</h3>
+                </div>
+            </div>
+
             @if (_selectedVoice != null)
             {
                 <div class="voice-detail-bar">
-                    <span style="font-size:14px; font-weight:500;">已选择: <strong>@_selectedVoice.Name</strong> (@(_selectedVoice.Gender) · @(_selectedVoice.Age))</span>
+                    <div class="selected-voice-summary">
+                        <span>当前音色</span>
+                        <strong title="@_selectedVoice.Name">@_selectedVoice.Name</strong>
+                        <small>@_selectedVoice.Gender · @_selectedVoice.Age</small>
+                    </div>
                     @if (_selectedVoice.Emotions.Count > 1)
                     {
-                        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                            <span style="font-size:12px; color:var(--text-muted);">情感:</span>
+                        <div class="emotion-row">
+                            <span>情感</span>
                             @foreach (var emo in _selectedVoice.Emotions)
                             {
                                 <button class="@($"filter-chip {(_selectedEmotion == emo.EmotionType ? "active" : "")}")"
@@ -198,44 +249,43 @@
                 </div>
             }
 
-            <!-- 语速与音量调节 -->
             <div class="voice-sliders">
                 @if (_vendor.SpeedDef.IsSupported)
                 {
-                <div class="slider-group">
-                    <div class="slider-header">
-                        <span class="slider-label">语速</span>
-                        <span class="slider-value">@_speed</span>
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span class="slider-label">语速</span>
+                            <span class="slider-value">@_speed</span>
+                        </div>
+                        <input type="range" class="win-slider"
+                               min="@_vendor.SpeedDef.Min"
+                               max="@_vendor.SpeedDef.Max"
+                               step="@_vendor.SpeedDef.Step"
+                               @bind="_speed"
+                               @bind:event="oninput" />
                     </div>
-                    <input type="range" class="win-slider" 
-                           min="@_vendor.SpeedDef.Min" 
-                           max="@_vendor.SpeedDef.Max" 
-                           step="@_vendor.SpeedDef.Step"
-                           @bind="_speed" 
-                           @bind:event="oninput" />
-                </div>
                 }
-                
+
                 @if (_vendor.VolumeDef.IsSupported)
                 {
-                <div class="slider-group">
-                    <div class="slider-header">
-                        <span class="slider-label">音量</span>
-                        <span class="slider-value">@_volume</span>
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span class="slider-label">音量</span>
+                            <span class="slider-value">@_volume</span>
+                        </div>
+                        <input type="range" class="win-slider"
+                               min="@_vendor.VolumeDef.Min"
+                               max="@_vendor.VolumeDef.Max"
+                               step="@_vendor.VolumeDef.Step"
+                               @bind="_volume"
+                               @bind:event="oninput" />
                     </div>
-                    <input type="range" class="win-slider" 
-                           min="@_vendor.VolumeDef.Min" 
-                           max="@_vendor.VolumeDef.Max" 
-                           step="@_vendor.VolumeDef.Step"
-                           @bind="_volume" 
-                           @bind:event="oninput" />
-                </div>
                 }
             </div>
 
-            <!-- 文本输入 -->
             <div class="form-group">
-                <textarea class="text-area" placeholder="在此输入您想要转换成语音的测试文本内容…" @bind="_inputText"></textarea>
+                <label class="field-caption">测试文本</label>
+                <textarea class="text-area generation-text" placeholder="输入要转换成语音的测试文本…" @bind="_inputText"></textarea>
             </div>
 
             <div class="@($"generation-readiness {(CanGenerate ? "ready" : "blocked")}")">
@@ -243,15 +293,7 @@
                 <span>@InputTextLength 字</span>
             </div>
 
-            <!-- 操作按钮 -->
             <div class="actions-bar">
-                @if (!string.IsNullOrEmpty(_vendor.DocumentationUrl))
-                {
-                    <a href="@_vendor.DocumentationUrl" target="_blank" class="btn btn-outline" style="text-decoration:none;">
-                        <svg style="width:16px;height:16px;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-                        官方文档
-                    </a>
-                }
                 <button class="btn btn-outline" @onclick="ClearText" disabled="@_isGenerating">清空</button>
                 <button class="btn btn-primary" @onclick="Generate" disabled="@(!CanGenerate)" title="@GenerateReadinessMessage">
                     @if (_isGenerating)
@@ -267,7 +309,6 @@
                 </button>
             </div>
 
-            <!-- 错误信息 -->
             @if (!string.IsNullOrEmpty(_errorMessage))
             {
                 var friendlyError = GetFriendlyErrorMessage(_errorMessage);
@@ -282,60 +323,54 @@
                     }
                 </div>
             }
+        </section>
 
-    <!-- ========== 生成结果区 ========== -->
-    @if (_result != null && _result.Success && _audioLoaded)
-    {
-        <div class="audio-result">
-            <span class="audio-result-label">生成结果 — @_result.VoiceName · @_result.ModelName</span>
-
-            <!-- 文件基本信息 -->
-            <div style="display:flex; gap:20px; font-size:12px; color:var(--text-muted); padding:4px 0 8px;">
-                <span>📄 @_audioFileName</span>
-                <span>💾 @_audioFileSize</span>
-            </div>
-
-            <!-- 播放器 -->
-            <div class="audio-player">
-                <button class="play-btn" @onclick="TogglePlay">
-                    @if (_isPlaying)
-                    {
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></svg>
-                    }
-                    else
-                    {
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
-                    }
-                </button>
-                <div class="progress-area">
-                    <div class="progress-time">
-                        <span>@FormatTime(_currentTime)</span>
-                        <span>@FormatTime(_duration)</span>
+        @if (_result != null && _result.Success && _audioLoaded)
+        {
+            <section class="audio-result">
+                <span class="audio-result-label">生成结果 — @_result.VoiceName · @_result.ModelName</span>
+                <div class="audio-meta">
+                    <span>@_audioFileName</span>
+                    <span>@_audioFileSize</span>
+                </div>
+                <div class="audio-player">
+                    <button class="play-btn" @onclick="TogglePlay">
+                        @if (_isPlaying)
+                        {
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></svg>
+                        }
+                        else
+                        {
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                        }
+                    </button>
+                    <div class="progress-area">
+                        <div class="progress-time">
+                            <span>@FormatTime(_currentTime)</span>
+                            <span>@FormatTime(_duration)</span>
+                        </div>
+                        <input type="range" class="audio-slider" min="0" max="1000" value="@((int)(ProgressPercent * 10))" @oninput="OnSliderSeek" />
                     </div>
-                    <input type="range" class="audio-slider" min="0" max="1000" value="@((int)(ProgressPercent * 10))" @oninput="OnSliderSeek" style="width:100%;" />
+                    <div class="select-wrapper playback-speed" title="播放速度">
+                        <select class="form-select" @bind="_playbackSpeedStr" @bind:after="OnPlaybackSpeedChanged">
+                            <option value="0.5">0.5x</option>
+                            <option value="0.75">0.75x</option>
+                            <option value="1">1.0x</option>
+                            <option value="1.25">1.25x</option>
+                            <option value="1.5">1.5x</option>
+                            <option value="2">2.0x</option>
+                        </select>
+                    </div>
+                    <button class="download-btn" title="打开音频所在文件夹" @onclick="OpenAudioFolder">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+                    </button>
+                    <button class="download-btn" title="移动音频到指定文件夹…" @onclick="MoveAudioToFolder">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                    </button>
                 </div>
-                <!-- 播放速度控制 -->
-                <div class="select-wrapper" style="width:80px;" title="播放速度">
-                    <select class="form-select" style="padding:4px 6px; font-size:12px;" @bind="_playbackSpeedStr" @bind:after="OnPlaybackSpeedChanged">
-                        <option value="0.5">0.5x</option>
-                        <option value="0.75">0.75x</option>
-                        <option value="1">1.0x</option>
-                        <option value="1.25">1.25x</option>
-                        <option value="1.5">1.5x</option>
-                        <option value="2">2.0x</option>
-                    </select>
-                </div>
-                <!-- 打开文件夹 -->
-                <button class="download-btn" title="打开音频所在文件夹" @onclick="OpenAudioFolder">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
-                </button>
-                <!-- 移动到指定文件夹 -->
-                <button class="download-btn" title="移动音频到指定文件夹…" @onclick="MoveAudioToFolder">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-                </button>
-            </div>
-        </div>
-    }
+            </section>
+        }
+        </aside>
         </div>
     }
 </div>
@@ -383,6 +418,8 @@
     private string _filterGender = "";
     private string _selectedVoiceName = "";
     private string _selectedEmotion = "general";
+    private const int VoicePageSize = 36;
+    private int _voicePageIndex = 0;
     private VoiceOption? _selectedVoice => _allVoices.FirstOrDefault(v => v.Id == _selectedVoiceId && v.Name == _selectedVoiceName);
 
     // 所有分类标签（去重）
@@ -508,20 +545,86 @@
     private void ToggleCategoryFilter(string cat)
     {
         _filterCategory = _filterCategory == cat ? "" : cat;
+        ResetVoicePage();
     }
 
     private int FilteredVoiceCount => FilteredVoices.Count();
+
+    private int VoiceTotalPages => Math.Max(1, (int)Math.Ceiling(FilteredVoiceCount / (double)VoicePageSize));
+
+    private IEnumerable<VoiceOption> PagedVoices => FilteredVoices
+        .Skip(_voicePageIndex * VoicePageSize)
+        .Take(VoicePageSize);
+
+    private int EmptyVoiceSlots
+    {
+        get
+        {
+            var currentPageCount = PagedVoices.Count();
+            if (currentPageCount == 0 || currentPageCount >= VoicePageSize) return 0;
+            return VoicePageSize - currentPageCount;
+        }
+    }
+
+    private string VoiceRangeLabel
+    {
+        get
+        {
+            if (FilteredVoiceCount == 0) return "0 / 0";
+            var start = _voicePageIndex * VoicePageSize + 1;
+            var end = Math.Min(start + VoicePageSize - 1, FilteredVoiceCount);
+            return $"{start}-{end} / {FilteredVoiceCount}";
+        }
+    }
 
     private bool HasActiveVoiceFilters =>
         !string.IsNullOrWhiteSpace(_searchText) ||
         !string.IsNullOrEmpty(_filterCategory) ||
         !string.IsNullOrEmpty(_filterGender);
 
+    private void ResetVoicePage()
+    {
+        _voicePageIndex = 0;
+    }
+
+    private void ClampVoicePage()
+    {
+        if (_voicePageIndex >= VoiceTotalPages)
+            _voicePageIndex = VoiceTotalPages - 1;
+        if (_voicePageIndex < 0)
+            _voicePageIndex = 0;
+    }
+
+    private void OnVoiceSearchChanged(ChangeEventArgs e)
+    {
+        _searchText = e.Value?.ToString() ?? "";
+        ResetVoicePage();
+    }
+
+    private void SetGenderFilter(string gender)
+    {
+        _filterGender = gender;
+        ResetVoicePage();
+    }
+
     private void ClearVoiceFilters()
     {
         _searchText = "";
         _filterCategory = "";
         _filterGender = "";
+        ResetVoicePage();
+    }
+
+    private void NextVoicePage()
+    {
+        if (_voicePageIndex < VoiceTotalPages - 1)
+            _voicePageIndex++;
+    }
+
+    private void PreviousVoicePage()
+    {
+        if (_voicePageIndex > 0)
+            _voicePageIndex--;
     }
 
     private string _voiceListStatus = "";
@@ -588,6 +691,7 @@
         _allVoices = voices;
         _allCategories = _allVoices.SelectMany(v => v.Categories).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().ToList();
         _voiceListStatus = status;
+        ResetVoicePage();
         EnsureSelectedVoice();
     }
 
@@ -858,6 +962,13 @@
         if (bytes < 1024) return $"{bytes} B";
         if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
         return $"{bytes / (1024.0 * 1024.0):F2} MB";
+    }
+
+    private string FormatVoiceMeta(VoiceOption voice)
+    {
+        var parts = new[] { voice.Gender, voice.Age }
+            .Where(p => !string.IsNullOrWhiteSpace(p));
+        return string.Join(" · ", parts);
     }
 
     private int InputTextLength => string.IsNullOrWhiteSpace(_inputText) ? 0 : _inputText.Trim().Length;
