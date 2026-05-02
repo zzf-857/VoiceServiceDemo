@@ -13,7 +13,7 @@
 
 - `Components/`：Blazor 页面和布局。页面过大时，优先拆成子组件。
 - `Services/`：桌面端业务服务。`TtsService.cs` 是统一入口，供应商细节优先放到 `Services/Providers/`。
-- `Services/Providers/`：桌面端供应商实现，例如火山 TTS 的联网、音色拉取、合成流程。
+- `Services/Providers/`：桌面端供应商实现，例如火山和阿里云 TTS 的联网、音色拉取、合成流程。
 - `Models/`：桌面端数据模型。
 - `Helpers/`：桌面端辅助类。
 - `VoiceServiceShared/`：桌面端和 MCP 端都要用的共享逻辑。供应商协议、凭证解析、请求构造应优先放这里。
@@ -33,6 +33,6 @@
 
 1. 保持 `bin/`、`obj/`、日志、临时音频不进入 Git。
 2. 新增供应商能力时，先判断能否放进 `VoiceServiceShared/`，避免桌面端和 MCP 端重复写一遍。
-3. 拆 `Services/TtsService.cs` 时按供应商拆，不要一次重构全部。火山 TTS 已经先拆到 `Services/Providers/HuoshanTtsProvider.cs`。
+3. 拆 `Services/TtsService.cs` 时按供应商拆，不要一次重构全部。火山 TTS 已经拆到 `Services/Providers/HuoshanTtsProvider.cs`，阿里云 TTS 已经拆到 `Services/Providers/AliyunTtsProvider.cs`。
 4. 拆 `Components/Pages/Workspace.razor` 时按界面区块拆，不要和 TTS 协议逻辑混在一起。
 5. 后续把 `VoiceServiceDemo.Tests` 改成标准测试项目，或者明确改名为 smoke test。

@@ -88,3 +88,10 @@ var copiedAliyunData = Path.Combine(AppContext.BaseDirectory, "aliyun_voices_raw
 AssertTrue(File.Exists(copiedAliyunData), "Aliyun voice data is copied to output root for runtime loading");
 
 Console.WriteLine("Runtime asset copy tests passed.");
+
+var aliyunProvider = new AliyunTtsProvider(new HttpClient(), new SettingsService());
+var aliyunVoices = await aliyunProvider.FetchVoicesAsync();
+AssertTrue(aliyunVoices.Count > 0, "Aliyun provider loads built-in voice data");
+AssertTrue(aliyunVoices.Any(v => !string.IsNullOrWhiteSpace(v.Id) && !string.IsNullOrWhiteSpace(v.Name)), "Aliyun provider returns usable voice ids and names");
+
+Console.WriteLine("Aliyun provider boundary tests passed.");
