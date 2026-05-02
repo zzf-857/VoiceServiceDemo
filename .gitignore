@@ -1,0 +1,38 @@
+# Build outputs
+bin/
+obj/
+**/bin/
+**/obj/
+
+# IDE and editor state
+.vs/
+.vscode/.ropeproject/
+*.user
+*.suo
+
+# Local runtime/config/secrets
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+*.local.json
+
+# Logs and diagnostic outputs
+*.log
+*.binlog
+logs/
+.local/
+
+# Generated media and temporary outputs
+output/
+outputs/
+generated/
+tmp/
+temp/
+*.wav
+*.mp3
+*.pcm
+
+# OS files
+Thumbs.db
+Desktop.ini

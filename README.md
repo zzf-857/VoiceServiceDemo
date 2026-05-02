@@ -35,18 +35,27 @@
    ```
 3. **API 准入配置**：运行软件后，请先进入“系统设置”页面。在对应云厂商下方填入您的身份凭证。
    - 例如腾讯云：直接填入 `SecretId|SecretKey`
-   - 火山引擎：填入 `AppID|AccessToken` 等
+- 火山引擎：生成语音可填 `AppID|AccessToken`；新版 V3 / 全量音色库高级格式为 `AppID|AccessToken|Cluster|AK|SK|V3ApiKey|ResourceId`
 
 ## 目录结构
 ```text
 VoiceServiceDemo/
- ├── Components/     # Blazor 前端视图与页面交互组件 (Workspace, Settings 等)
- ├── Helpers/        # 原生手写的各云厂商签名生成器 (TencentSigner, VolcengineSigner 等)
- ├── Models/         # 实体类与配置接口 (VendorConfig, TtsRequest/Result, VoiceOption)
- ├── Services/       # TTS 核心业务层 (TtsService 负责适配所有产商请求及响应)
- ├── notbook/        # 开发者对接笔记 (如 Tencent_TTS_Integration_Guide.md)
- └── wwwroot/        # 静态资源、CSS 样式、音频互操作 JS (audioInterop)
+ ├── VoiceServiceDemo.slnx   # 解决方案入口，包含桌面端、MCP、共享库和自检项目
+ ├── Components/             # Blazor 前端视图与页面交互组件
+ ├── Helpers/                # 桌面端辅助类
+ ├── Models/                 # 实体类与配置接口
+ ├── Services/               # 桌面端 TTS 业务服务
+ ├── VoiceServiceShared/     # 桌面端和 MCP 端共享的协议、凭证、请求构造逻辑
+ ├── VoiceServiceMcp/        # MCP 服务端
+ ├── VoiceServiceDemo.Tests/ # 现有自检项目
+ ├── Docs/                   # 项目文档、供应商接入资料和整理计划
+ ├── data/                   # 供应商原始数据或解析后的静态数据
+ ├── scripts/                # 辅助脚本
+ ├── assets/                 # 设计稿、图标等非代码资源
+ └── wwwroot/                # 静态资源、CSS 样式、音频互操作 JS
 ```
+
+更详细的项目地图见 [Docs/PROJECT_STRUCTURE.md](Docs/PROJECT_STRUCTURE.md)。
 
 ## 开源协议
 本项目采用 MIT 开源协议 - 详情请查看 [LICENSE](LICENSE) 文件。

@@ -3,7 +3,9 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using VoiceServiceDemo.Helpers;
 using VoiceServiceDemo.Models;
+using VoiceServiceDemo.Services.Providers;
 
 namespace VoiceServiceDemo.Services;
 
@@ -14,11 +16,13 @@ public class TtsService
 {
     private readonly HttpClient _httpClient = new();
     private readonly SettingsService _settingsService;
+    private readonly HuoshanTtsProvider _huoshanProvider;
 
     public TtsService(SettingsService settingsService)
     {
         _settingsService = settingsService;
         _httpClient.Timeout = TimeSpan.FromSeconds(60);
+        _huoshanProvider = new HuoshanTtsProvider(_httpClient, _settingsService);
     }
 
     /// <summary>
@@ -36,7 +40,7 @@ public class TtsService
             {
                 "openai" => await TestOpenAiAsync(apiKey),
                 "aliyun" => await TestAliyunAsync(apiKey),
-                "huoshan" => await TestHuoshanAsync(apiKey),
+                "huoshan" => await _huoshanProvider.TestConnectivityAsync(apiKey),
                 "tencent" => await TestTencentAsync(apiKey),
                 "baidu" => await TestBaiduAsync(apiKey),
                 "azure" => await TestAzureAsync(apiKey),
@@ -58,7 +62,7 @@ public class TtsService
         try
         {
             if (vendorId == "aliyun") return await FetchAliyunVoicesAsync();
-            if (vendorId == "huoshan") return await FetchHuoshanVoicesAsync(apiKey);
+            if (vendorId == "huoshan") return await _huoshanProvider.FetchVoicesAsync(apiKey);
             if (vendorId == "tencent") return await FetchTencentVoicesAsync(apiKey);
             return new List<VoiceOption>();
         }
@@ -173,134 +177,6 @@ public class TtsService
         });
     }
 
-    private async Task<List<VoiceOption>> FetchHuoshanVoicesAsync(string apiKey)
-    {
-        var keys = apiKey.Split('|');
-        if (keys.Length < 5 || string.IsNullOrWhiteSpace(keys[3]) || string.IsNullOrWhiteSpace(keys[4]))
-            return new List<VoiceOption>(); // 需要 AK 和 SK 才能调用 OpenAPI
-
-        var ak = keys[3];
-        var sk = keys[4];
-
-        // 官方文档：POST /?Action=ListBigModelTTSTimbres&Version=2025-05-20，Body 为 {}
-        var bodyBytes = Encoding.UTF8.GetBytes("{}");
-
-        var req = new HttpRequestMessage(HttpMethod.Post, "https://open.volcengineapi.com/?Action=ListBigModelTTSTimbres&Version=2025-05-20");
-        req.Content = new ByteArrayContent(bodyBytes);
-        // content-type 必须与签名器里写死的值完全一致（大写 UTF-8）
-        req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "UTF-8" };
-
-        VoiceServiceDemo.Helpers.VolcengineSigner.SignRequest(req, ak, sk, "cn-beijing", "speech_saas_prod", bodyBytes);
-
-        var resp = await _httpClient.SendAsync(req);
-        var json = await resp.Content.ReadAsStringAsync();
-
-        // 写入调试日志（无论成功或失败都写入）
-        try { await File.WriteAllTextAsync(Path.Combine(_settingsService.Settings.OutputDirectory, "huoshan_voices_debug.json"), json); } catch { }
-
-        if (!resp.IsSuccessStatusCode) return new List<VoiceOption>();
-
-        var options = new List<VoiceOption>();
-        try
-        {
-            var doc = JsonDocument.Parse(json);
-
-            // 官方响应结构: { "Result": { "Timbres": [ { "SpeakerID": "...", "TimbreInfos": [{ "SpeakerName": "...", "Gender": "...", "DemoURL": "..." }] } ] } }
-            if (!doc.RootElement.TryGetProperty("Result", out var result)) return options;
-
-            JsonElement timbres;
-            if (!result.TryGetProperty("Timbres", out timbres))
-            {
-                // 兜底：尝试其他可能的字段名
-                foreach (var propName in new[] { "SpeakerList", "TimbreList", "Data" })
-                    if (result.TryGetProperty(propName, out timbres)) break;
-            }
-
-            if (timbres.ValueKind != JsonValueKind.Array) return options;
-
-            foreach (var timbre in timbres.EnumerateArray())
-            {
-                var speakerId = TryGetStr(timbre, "SpeakerID", "VoiceType", "speaker_id", "voice_type") ?? "";
-                if (string.IsNullOrEmpty(speakerId)) continue;
-
-                // 从 TimbreInfos 嵌套数组中取详细信息
-                if (timbre.TryGetProperty("TimbreInfos", out var infos) && infos.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var info in infos.EnumerateArray())
-                    {
-                        var name = TryGetStr(info, "SpeakerName", "Name", "DisplayName") ?? speakerId;
-                        var gender = TryGetStr(info, "Gender", "gender") ?? "";
-                        var age = TryGetStr(info, "Age", "age") ?? "";
-                        string? demoUrl = null;
-
-                        // 解析 Categories
-                        var categories = new List<string>();
-                        if (info.TryGetProperty("Categories", out var cats) && cats.ValueKind == JsonValueKind.Array)
-                        {
-                            foreach (var cat in cats.EnumerateArray())
-                            {
-                                var c = TryGetStr(cat, "Category");
-                                if (!string.IsNullOrEmpty(c)) categories.Add(c);
-                                // 子分类（如 多语种→美式英语）
-                                if (cat.TryGetProperty("NextCategory", out var next))
-                                {
-                                    var nc = TryGetStr(next, "Category");
-                                    if (!string.IsNullOrEmpty(nc)) categories.Add(nc);
-                                }
-                            }
-                        }
-
-                        // 解析 Emotions
-                        var emotions = new List<EmotionInfo>();
-                        if (info.TryGetProperty("Emotions", out var emos) && emos.ValueKind == JsonValueKind.Array)
-                        {
-                            foreach (var emo in emos.EnumerateArray())
-                            {
-                                var ei = new EmotionInfo
-                                {
-                                    Emotion = TryGetStr(emo, "Emotion") ?? "",
-                                    EmotionType = TryGetStr(emo, "EmotionType") ?? "",
-                                    DemoText = TryGetStr(emo, "DemoText"),
-                                    DemoUrl = TryGetStr(emo, "DemoURL", "DemoUrl")
-                                };
-                                emotions.Add(ei);
-                                if (demoUrl == null) demoUrl = ei.DemoUrl;
-                            }
-                        }
-
-                        // 判断语言
-                        var lang = categories.Contains("多语种") && categories.Count > 1
-                            ? categories.LastOrDefault(c => c != "多语种") ?? "中文"
-                            : "中文";
-
-                        options.Add(new VoiceOption
-                        {
-                            Id = speakerId,
-                            Name = name,
-                            Language = lang,
-                            Gender = gender,
-                            Age = age,
-                            SampleUrl = demoUrl,
-                            Categories = categories,
-                            Emotions = emotions,
-                            IsBigTTS = true  // 所有从 ListBigModelTTSTimbres API 获取的音色都是 BigTTS
-                        });
-                    }
-                }
-                else
-                {
-                    // 如果字段直接在 timbre 对象上（兜底）
-                    var name = TryGetStr(timbre, "SpeakerName", "Name", "DisplayName") ?? speakerId;
-                    var gender = TryGetStr(timbre, "Gender", "gender") ?? "";
-                    var demoUrl = TryGetStr(timbre, "DemoURL", "DemoUrl", "AudioUrl");
-                    options.Add(new VoiceOption { Id = speakerId, Name = name, Language = "中文", Gender = gender, SampleUrl = demoUrl, IsBigTTS = true });
-                }
-            }
-        }
-        catch { }
-        return options;
-    }
-
     private static string? TryGetStr(JsonElement elem, params string[] names)
     {
         foreach (var n in names)
@@ -334,29 +210,6 @@ public class TtsService
         if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized || resp.StatusCode == System.Net.HttpStatusCode.Forbidden)
             return (false, $"鉴权失败 ({resp.StatusCode})");
         return (true, "阿里云 连接成功 ✓");
-    }
-
-    private async Task<(bool, string)> TestHuoshanAsync(string apiKey)
-    {
-        var keys = apiKey.Split('|');
-        if (keys.Length < 2)
-            return (false, "格式错误，应为: AppID|AccessToken 或 AppID|AccessToken|Cluster");
-
-        var appId = keys[0];
-        var token = keys[1];
-        var cluster = keys.Length >= 3 && !string.IsNullOrWhiteSpace(keys[2]) ? keys[2] : "volcano_tts";
-
-        var body = new { app = new { appid = appId, token = "access_token", cluster = cluster },
-                         user = new { uid = "388808087185088" },
-                         audio = new { voice_type = "zh_female_cancan", encoding = "mp3", speed_ratio = 1.0, volume_ratio = 1.0, pitch_ratio = 1.0 },
-                         request = new { reqid = Guid.NewGuid().ToString(), text = "test", text_type = "plain", operation = "query", with_frontend = 1, frontend_type = "unitTson" } };
-        var req = new HttpRequestMessage(HttpMethod.Post, "https://openspeech.bytedance.com/api/v1/tts");
-        req.Headers.TryAddWithoutValidation("Authorization", $"Bearer;{token}");
-        req.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        var resp = await _httpClient.SendAsync(req);
-        if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized || resp.StatusCode == System.Net.HttpStatusCode.Forbidden)
-            return (false, $"鉴权失败 ({resp.StatusCode})");
-        return (true, "火山引擎 连接成功 ✓");
     }
 
     private async Task<(bool, string)> TestBaiduAsync(string apiKey)
@@ -623,7 +476,7 @@ public class TtsService
             {
                 "openai" => await GenerateOpenAiAsync(request, apiKey),
                 "aliyun" => await GenerateAliyunAsync(request, apiKey),
-                "huoshan" => await GenerateHuoshanAsync(request, apiKey),
+                "huoshan" => await _huoshanProvider.GenerateAsync(request, apiKey),
                 "tencent" => await GenerateTencentAsync(request, apiKey),
                 "baidu" => await GenerateBaiduAsync(request, apiKey),
                 "azure" => await GenerateAzureAsync(request, apiKey),
@@ -748,73 +601,6 @@ public class TtsService
         }
 
         return await SaveAudioResponse(response, request, "aliyun");
-    }
-
-    // ========== 火山引擎 ==========
-    private async Task<TtsResult> GenerateHuoshanAsync(TtsRequest request, string apiKey)
-    {
-        var keys = apiKey.Split('|');
-        if (keys.Length < 2)
-            return new TtsResult { Success = false, ErrorMessage = "火山引擎 Key 格式应为: AppID|AccessToken 或 AppID|AccessToken|Cluster" };
-
-        var appId = keys[0];
-        var token = keys[1];
-        
-        // 判断是否为 BigTTS 音色（通过音色 ID 后缀或前缀判断）
-        var isBigTTS = request.VoiceId.EndsWith("_bigtts") || 
-                       request.VoiceId.EndsWith("_tob") ||
-                       request.VoiceId.Contains("_moon_") ||
-                       request.VoiceId.Contains("_mars_") ||
-                       request.VoiceId.Contains("_wvae_") ||
-                       request.VoiceId.StartsWith("ICL_") ||
-                       request.VoiceId.StartsWith("multi_");
-        
-        // BigTTS 不需要 cluster 参数，标准 TTS 使用 volcano_tts
-        var cluster = isBigTTS 
-            ? "" 
-            : (keys.Length >= 3 && !string.IsNullOrWhiteSpace(keys[2]) ? keys[2] : "volcano_tts");
-
-        var body = new
-        {
-            app = new { appid = appId, token = "access_token", cluster = cluster },
-            user = new { uid = "388808087185088" },
-            audio = new { voice_type = request.VoiceId, encoding = "mp3", speed_ratio = request.Speed, volume_ratio = request.Volume, pitch_ratio = 1.0 },
-            request = new { reqid = Guid.NewGuid().ToString(), text = request.Text, text_type = "plain", operation = "query", with_frontend = 1, frontend_type = "unitTson" }
-        };
-
-        var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://openspeech.bytedance.com/api/v1/tts");
-        httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer;{token}");
-        httpRequest.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-
-        var response = await _httpClient.SendAsync(httpRequest);
-        var respJson = await response.Content.ReadAsStringAsync();
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return new TtsResult { Success = false, ErrorMessage = $"火山引擎 API 错误 ({response.StatusCode}): {respJson}" };
-        }
-
-        // 解析火山返回的 JSON，获取 base64 编码的二进制音频
-        var doc = JsonDocument.Parse(respJson);
-        if (doc.RootElement.TryGetProperty("data", out var audioBase64) && audioBase64.ValueKind == JsonValueKind.String)
-        {
-            var audioBytes = Convert.FromBase64String(audioBase64.GetString()!);
-            var filePath = GetOutputFilePath(request.VendorId);
-            await File.WriteAllBytesAsync(filePath, audioBytes);
-
-            var vendor = VendorRegistry.GetById(request.VendorId);
-            return new TtsResult
-            {
-                Success = true,
-                FilePath = filePath,
-                VendorName = vendor?.Name ?? "",
-                ModelName = request.ModelId,
-                VoiceName = request.VoiceId,
-                Text = request.Text
-            };
-        }
-
-        return new TtsResult { Success = false, ErrorMessage = "火山引擎返回结果无法解析 data: " + respJson };
     }
 
     // ========== 百度 ==========

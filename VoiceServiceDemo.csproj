@@ -10,7 +10,7 @@
     <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
     <RootNamespace>VoiceServiceDemo</RootNamespace>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <DefaultItemExcludes>$(DefaultItemExcludes);VoiceServiceMcp\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);VoiceServiceMcp\**;VoiceServiceDemo.Tests\**;VoiceServiceShared\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,10 +18,11 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="8.0.*" />
     <PackageReference Include="NAudio" Version="2.2.*" />
     <PackageReference Include="System.Text.Json" Version="8.0.*" />
+    <ProjectReference Include="VoiceServiceShared\VoiceServiceShared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="aliyun_voices_raw.json">
+    <None Include="data\aliyun\voices_raw.json" Link="aliyun_voices_raw.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

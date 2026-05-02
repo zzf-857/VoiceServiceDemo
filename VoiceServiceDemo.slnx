@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="VoiceServiceDemo.csproj" />
+  <Project Path="VoiceServiceDemo.Tests/VoiceServiceDemo.Tests.csproj" />
+  <Project Path="VoiceServiceMcp/VoiceServiceMcp.csproj" />
+  <Project Path="VoiceServiceShared/VoiceServiceShared.csproj" />
+</Solution>
