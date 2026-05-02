@@ -95,3 +95,10 @@ AssertTrue(aliyunVoices.Count > 0, "Aliyun provider loads built-in voice data");
 AssertTrue(aliyunVoices.Any(v => !string.IsNullOrWhiteSpace(v.Id) && !string.IsNullOrWhiteSpace(v.Name)), "Aliyun provider returns usable voice ids and names");
 
 Console.WriteLine("Aliyun provider boundary tests passed.");
+
+var tencentProvider = new TencentTtsProvider(new HttpClient(), new SettingsService());
+var invalidTencent = await tencentProvider.TestConnectivityAsync("only-secret-id");
+AssertFalse(invalidTencent.Success, "Tencent provider rejects one-part credentials without network call");
+AssertTrue(invalidTencent.Message.Contains("SecretId|SecretKey"), "Tencent provider explains credential format");
+
+Console.WriteLine("Tencent provider boundary tests passed.");
