@@ -1,6 +1,8 @@
 using VoiceService.Shared;
+using VoiceServiceDemo.Models;
 using VoiceServiceDemo.Services;
 using VoiceServiceDemo.Services.Providers;
+using System.Text.Json;
 
 static void AssertEqual<T>(T expected, T actual, string message)
 {
@@ -75,7 +77,69 @@ var errorEvent = HuoshanTtsProtocol.ParseV3StreamLine("data: {\"code\":45000000,
 AssertTrue(errorEvent.IsError, "non-success V3 code is parsed as error");
 AssertTrue(errorEvent.ErrorMessage.Contains("speaker permission denied"), "V3 error message is preserved");
 
+var huoshanEmotionBody = HuoshanTtsProtocol.BuildV3RequestBody(
+    "今天真开心。",
+    "zh_female_wenrouxiaoya_moon_bigtts",
+    1.0,
+    1.0,
+    "voice_ops",
+    "happy");
+var huoshanEmotionJson = HuoshanTtsProtocol.Serialize(huoshanEmotionBody);
+AssertTrue(huoshanEmotionJson.Contains("\"emotion\":\"happy\""), "Huoshan V3 request includes selected emotion");
+
+var huoshanNeutralBody = HuoshanTtsProtocol.BuildV3RequestBody(
+    "今天真开心。",
+    "zh_female_wenrouxiaoya_moon_bigtts",
+    1.0,
+    1.0,
+    "voice_ops",
+    "");
+var huoshanNeutralJson = HuoshanTtsProtocol.Serialize(huoshanNeutralBody);
+AssertFalse(huoshanNeutralJson.Contains("\"emotion\""), "Huoshan V3 request omits empty emotion");
+
+var huoshanAsyncEmotionBody = HuoshanTtsProtocol.BuildV3AsyncSubmitBody(
+    "这是一段长文本。",
+    "zh_female_wenrouxiaoya_moon_bigtts",
+    1.0,
+    1.0,
+    "voice_ops",
+    "req-123",
+    "storytelling");
+var huoshanAsyncEmotionJson = HuoshanTtsProtocol.Serialize(huoshanAsyncEmotionBody);
+AssertTrue(huoshanAsyncEmotionJson.Contains("\"emotion\":\"storytelling\""), "Huoshan async V3 request includes selected emotion");
+
 Console.WriteLine("Shared Huoshan protocol tests passed.");
+
+var azurePlainRequest = new TtsRequest
+{
+    VendorId = "azure",
+    ModelId = "neural",
+    VoiceId = "zh-CN-XiaoxiaoNeural",
+    Text = "你好 <朋友>",
+    Speed = 1.2,
+    Volume = 80,
+    InputFormat = TtsInputFormat.PlainText,
+    Style = "cheerful",
+    StyleDegree = 1.5
+};
+var azureSsml = AzureSsmlBuilder.Build(azurePlainRequest);
+AssertTrue(azureSsml.Contains("xmlns:mstts=\"https://www.w3.org/2001/mstts\""), "Azure SSML declares mstts namespace");
+AssertTrue(azureSsml.Contains("voice name=\"zh-CN-XiaoxiaoNeural\""), "Azure SSML uses selected voice");
+AssertTrue(azureSsml.Contains("style=\"cheerful\""), "Azure SSML includes selected style");
+AssertTrue(azureSsml.Contains("styledegree=\"1.5\""), "Azure SSML includes selected style degree");
+AssertTrue(azureSsml.Contains("你好 &lt;朋友&gt;"), "Azure SSML escapes plain text");
+
+var rawSsmlRequest = new TtsRequest
+{
+    VendorId = "azure",
+    VoiceId = "zh-CN-XiaoxiaoNeural",
+    Text = "ignored",
+    InputFormat = TtsInputFormat.Ssml,
+    SsmlText = "<speak version=\"1.0\">raw</speak>"
+};
+AssertEqual("<speak version=\"1.0\">raw</speak>", AzureSsmlBuilder.Build(rawSsmlRequest), "Azure raw SSML mode preserves user markup");
+
+Console.WriteLine("Azure SSML builder tests passed.");
 
 var huoshanProvider = new HuoshanTtsProvider(new HttpClient(), new SettingsService());
 var noNetworkConnectivity = await huoshanProvider.TestConnectivityAsync("app-123|token-abc");
@@ -102,3 +166,12 @@ AssertFalse(invalidTencent.Success, "Tencent provider rejects one-part credentia
 AssertTrue(invalidTencent.Message.Contains("SecretId|SecretKey"), "Tencent provider explains credential format");
 
 Console.WriteLine("Tencent provider boundary tests passed.");
+
+var settingsRazorPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Components", "Pages", "Settings.razor"));
+var settingsMarkup = await File.ReadAllTextAsync(settingsRazorPath);
+AssertTrue(settingsMarkup.Contains("credential-field-label"), "Settings credential inputs have persistent labels");
+AssertTrue(settingsMarkup.Contains("生成语音必填"), "Settings explains required speech generation credentials");
+AssertTrue(settingsMarkup.Contains("仅刷新全量音色库"), "Settings explains voice library refresh credentials");
+AssertTrue(settingsMarkup.Contains("API Key / 凭证"), "Settings generic credential input has a visible label");
+
+Console.WriteLine("Settings credential UX markup tests passed.");

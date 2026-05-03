@@ -1176,7 +1176,7 @@ html, body, #app {
     display: flex;
     flex-direction: column;
     gap: 24px;
-    max-width: 800px;
+    max-width: 1080px;
 }
 
 .settings-section h3 {
@@ -1193,7 +1193,7 @@ html, body, #app {
 
 .settings-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     padding: 20px 24px;
     gap: 32px;
     border-bottom: 1px solid var(--border);
@@ -1274,6 +1274,146 @@ html, body, #app {
 
 .settings-row .row-input {
     flex: 1;
+}
+
+.credential-row-input {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 0;
+}
+
+.credential-stack {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.credential-group-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.credential-group-header strong {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.credential-group-header span,
+.credential-group-note,
+.credential-field-hint {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.credential-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.credential-grid.advanced {
+    margin-top: 12px;
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+}
+
+.credential-field {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.credential-field.wide,
+.credential-field.full {
+    grid-column: span 1;
+}
+
+.credential-field-label {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.credential-field-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.credential-field-control input,
+.credential-field input {
+    min-width: 0;
+}
+
+.credential-help-btn,
+.credential-test-btn {
+    flex-shrink: 0;
+    min-height: 38px;
+    padding: 8px 12px;
+    font-size: 12px;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+.credential-test-btn {
+    align-self: flex-start;
+    margin-top: 52px;
+}
+
+.credential-details {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.credential-details summary {
+    cursor: pointer;
+    user-select: none;
+    color: var(--text-secondary);
+}
+
+.credential-group-note {
+    margin-top: 10px;
+}
+
+.credential-test-result {
+    margin-left: 192px;
+    margin-top: 8px;
+    font-size: 13px;
+}
+
+.icon-ghost-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+
+.icon-ghost-btn:hover {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border-color: var(--border);
 }
 
 .settings-row .row-input input {
@@ -1525,6 +1665,34 @@ html, body, #app {
     .voice-pagination {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .settings-row {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .settings-row .row-label {
+        width: auto;
+    }
+
+    .credential-row-input {
+        width: 100%;
+        flex-direction: column;
+    }
+
+    .credential-grid,
+    .credential-grid.advanced {
+        grid-template-columns: 1fr;
+    }
+
+    .credential-test-btn {
+        align-self: stretch;
+        margin-top: 0;
+    }
+
+    .credential-test-result {
+        margin-left: 0;
     }
 }
 

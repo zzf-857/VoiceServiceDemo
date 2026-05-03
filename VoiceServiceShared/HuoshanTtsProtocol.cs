@@ -99,7 +99,7 @@ public static class HuoshanTtsProtocol
         return DefaultResourceId;
     }
 
-    public static object BuildV3RequestBody(string text, string speaker, double speed, double volume, string uid)
+    public static object BuildV3RequestBody(string text, string speaker, double speed, double volume, string uid, string emotion = "")
     {
         return new
         {
@@ -114,12 +114,13 @@ public static class HuoshanTtsProtocol
                     sample_rate = 24000,
                     speech_rate = ToV3Rate(speed),
                     loudness_rate = ToV3Rate(volume)
-                }
+                },
+                emotion = string.IsNullOrWhiteSpace(emotion) ? null : emotion.Trim()
             }
         };
     }
 
-    public static object BuildV3AsyncSubmitBody(string text, string speaker, double speed, double volume, string uid, string uniqueId)
+    public static object BuildV3AsyncSubmitBody(string text, string speaker, double speed, double volume, string uid, string uniqueId, string emotion = "")
     {
         return new
         {
@@ -135,7 +136,8 @@ public static class HuoshanTtsProtocol
                     sample_rate = 24000,
                     speech_rate = ToV3Rate(speed),
                     loudness_rate = ToV3Rate(volume)
-                }
+                },
+                emotion = string.IsNullOrWhiteSpace(emotion) ? null : emotion.Trim()
             }
         };
     }

@@ -16,34 +16,94 @@
         @foreach (var vendor in VendorRegistry.All)
         {
             var vid = vendor.Id;
-            <div class="settings-row">
+            <div id="settings-row-@vid" class="settings-row @(IsFocusedVendor(vid) ? "focused" : "")">
                 <div class="row-label">@vendor.Name</div>
-                <div class="row-input" style="display:flex;gap:8px;align-items:center;">
+                <div class="row-input credential-row-input">
                     @if (vid == "huoshan")
                     {
-                        var parts = GetApiKey(vid).Split('|');
-                        var appId = parts.Length > 0 ? parts[0] : "";
-                        var token = parts.Length > 1 ? parts[1] : "";
-                        var cluster = parts.Length > 2 ? parts[2] : "";
-                        var ak = parts.Length > 3 ? parts[3] : "";
-                        var sk = parts.Length > 4 ? parts[4] : "";
+                        var credentials = GetHuoshanCredentials();
                         
-                        <div style="flex:1; display:flex; gap:8px; flex-wrap:wrap;">
-                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:1; min-width:120px;" placeholder="AppID" value="@appId" @onchange='e => UpdateHuoshanKey(0, e.Value?.ToString() ?? "")' />
-                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:2; min-width:180px;" placeholder="Access Token ( TTS )" value="@token" @onchange='e => UpdateHuoshanKey(1, e.Value?.ToString() ?? "")' />
-                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:1; min-width:120px;" placeholder="Cluster (可选)" value="@cluster" @onchange='e => UpdateHuoshanKey(2, e.Value?.ToString() ?? "")' title="默认为 volcano_tts" />
-                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:1.5; min-width:140px;" placeholder="Access Key ( API )" value="@ak" @onchange='e => UpdateHuoshanKey(3, e.Value?.ToString() ?? "")' />
-                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:1.5; min-width:140px;" placeholder="Secret Key ( API )" value="@sk" @onchange='e => UpdateHuoshanKey(4, e.Value?.ToString() ?? "")' />
-                            <button type="button" class="btn btn-outline" style="padding:4px; border:none; background:transparent;" @onclick="() => TogglePasswordVisibility(vid)">
-                                @if (IsPasswordVisible(vid))
-                                {
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
-                                }
-                                else
-                                {
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                }
-                            </button>
+                        <div class="credential-stack">
+                            <div class="credential-group-header">
+                                <div>
+                                    <strong>基础凭证</strong>
+                                    <span>生成语音必填。来自火山语音控制台应用配置。</span>
+                                </div>
+                                <button type="button" class="icon-ghost-btn" @onclick="() => TogglePasswordVisibility(vid)" title="显示/隐藏火山凭证">
+                                    @if (IsPasswordVisible(vid))
+                                    {
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                                    }
+                                    else
+                                    {
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                    }
+                                </button>
+                            </div>
+                            <div class="credential-grid">
+                                <label class="credential-field">
+                                    <span class="credential-field-label">AppID</span>
+                                    <span class="credential-field-control">
+                                        <input type="@(IsPasswordVisible(vid) ? "text" : "password")" placeholder="例如 1234567890" value="@credentials.AppId" @onchange='e => UpdateHuoshanKey(0, e.Value?.ToString() ?? "")' />
+                                        <a class="btn btn-outline credential-help-btn" href="@GetHuoshanHelpUrl(0)" target="_blank" title="@GetHuoshanHelpTitle(0)">获取</a>
+                                    </span>
+                                    <span class="credential-field-hint">用于识别火山语音应用。</span>
+                                </label>
+                                <label class="credential-field wide">
+                                    <span class="credential-field-label">Access Token</span>
+                                    <span class="credential-field-control">
+                                        <input type="@(IsPasswordVisible(vid) ? "text" : "password")" placeholder="粘贴 Access Token" value="@credentials.AccessToken" @onchange='e => UpdateHuoshanKey(1, e.Value?.ToString() ?? "")' />
+                                        <a class="btn btn-outline credential-help-btn" href="@GetHuoshanHelpUrl(1)" target="_blank" title="@GetHuoshanHelpTitle(1)">获取</a>
+                                    </span>
+                                    <span class="credential-field-hint">生成短文本/V3 语音时使用。</span>
+                                </label>
+                            </div>
+                            <details class="credential-details">
+                                <summary>高级能力：V3 API Key、ResourceId 与全量音色库刷新凭证</summary>
+                                <div class="credential-group-note">以下字段不是基础生成都必填。AK/SK 仅刷新全量音色库；V3 API Key 和 ResourceId 用于新版 V3 或特定资源。</div>
+                                <div class="credential-grid advanced">
+                                    <label class="credential-field">
+                                        <span class="credential-field-label">Cluster</span>
+                                        <span class="credential-field-control">
+                                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" placeholder="可选，默认 volcano_tts" value="@credentials.Cluster" @onchange='e => UpdateHuoshanKey(2, e.Value?.ToString() ?? "")' title="标准音色默认使用 volcano_tts；大模型音色会自动置空" />
+                                            <a class="btn btn-outline credential-help-btn" href="@GetHuoshanHelpUrl(2)" target="_blank" title="@GetHuoshanHelpTitle(2)">说明</a>
+                                        </span>
+                                        <span class="credential-field-hint">旧版标准音色集群；不确定可留空。</span>
+                                    </label>
+                                    <label class="credential-field">
+                                        <span class="credential-field-label">Access Key</span>
+                                        <span class="credential-field-control">
+                                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" placeholder="仅刷新全量音色库" value="@credentials.AccessKey" @onchange='e => UpdateHuoshanKey(3, e.Value?.ToString() ?? "")' />
+                                            <a class="btn btn-outline credential-help-btn" href="@GetHuoshanHelpUrl(3)" target="_blank" title="@GetHuoshanHelpTitle(3)">获取</a>
+                                        </span>
+                                        <span class="credential-field-hint">控制面 OpenAPI 凭证。</span>
+                                    </label>
+                                    <label class="credential-field">
+                                        <span class="credential-field-label">Secret Key</span>
+                                        <span class="credential-field-control">
+                                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" placeholder="仅刷新全量音色库" value="@credentials.SecretKey" @onchange='e => UpdateHuoshanKey(4, e.Value?.ToString() ?? "")' />
+                                            <a class="btn btn-outline credential-help-btn" href="@GetHuoshanHelpUrl(4)" target="_blank" title="@GetHuoshanHelpTitle(4)">获取</a>
+                                        </span>
+                                        <span class="credential-field-hint">与 Access Key 配对使用。</span>
+                                    </label>
+                                    <label class="credential-field">
+                                        <span class="credential-field-label">V3 API Key</span>
+                                        <span class="credential-field-control">
+                                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" placeholder="可选，新版 V3 鉴权" value="@credentials.ApiKey" @onchange='e => UpdateHuoshanKey(5, e.Value?.ToString() ?? "")' />
+                                            <a class="btn btn-outline credential-help-btn" href="@GetHuoshanHelpUrl(5)" target="_blank" title="@GetHuoshanHelpTitle(5)">获取</a>
+                                        </span>
+                                        <span class="credential-field-hint">配置后可不用 AppID/Token 走部分 V3 能力。</span>
+                                    </label>
+                                    <label class="credential-field">
+                                        <span class="credential-field-label">ResourceId</span>
+                                        <span class="credential-field-control">
+                                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" placeholder="默认 seed-tts-2.0" value="@credentials.ResourceId" @onchange='e => UpdateHuoshanKey(6, e.Value?.ToString() ?? "")' />
+                                            <a class="btn btn-outline credential-help-btn" href="@GetHuoshanHelpUrl(6)" target="_blank" title="@GetHuoshanHelpTitle(6)">说明</a>
+                                        </span>
+                                        <span class="credential-field-hint">指定音色对应的 V3 资源。</span>
+                                    </label>
+                                </div>
+                            </details>
                         </div>
                     }
                     else if (vid == "tencent")
@@ -53,47 +113,73 @@
                         var tcSecretId = tcParts.Length > 1 ? tcParts[1] : "";
                         var tcSecretKey = tcParts.Length > 2 ? tcParts[2] : "";
 
-                        <div style="flex:1; display:flex; gap:8px; flex-wrap:wrap;">
-                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:1; min-width:130px;" placeholder="AppID" value="@tcAppId" @onchange='e => UpdateTencentKey(0, e.Value?.ToString() ?? "")' />
-                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:1.5; min-width:200px;" placeholder="SecretId" value="@tcSecretId" @onchange='e => UpdateTencentKey(1, e.Value?.ToString() ?? "")' />
-                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")" style="flex:1.5; min-width:200px;" placeholder="SecretKey" value="@tcSecretKey" @onchange='e => UpdateTencentKey(2, e.Value?.ToString() ?? "")' />
-                            <button type="button" class="btn btn-outline" style="padding:4px; border:none; background:transparent;" @onclick="() => TogglePasswordVisibility(vid)">
-                                @if (IsPasswordVisible(vid))
-                                {
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
-                                }
-                                else
-                                {
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                }
-                            </button>
+                        <div class="credential-stack">
+                            <div class="credential-group-header">
+                                <div>
+                                    <strong>腾讯云凭证</strong>
+                                    <span>生成语音使用 SecretId 和 SecretKey；AppID 仅用于记录和对齐控制台信息。</span>
+                                </div>
+                                <button type="button" class="icon-ghost-btn" @onclick="() => TogglePasswordVisibility(vid)" title="显示/隐藏腾讯云凭证">
+                                    @if (IsPasswordVisible(vid))
+                                    {
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                                    }
+                                    else
+                                    {
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                    }
+                                </button>
+                            </div>
+                            <div class="credential-grid">
+                                <label class="credential-field">
+                                    <span class="credential-field-label">AppID</span>
+                                    <input type="@(IsPasswordVisible(vid) ? "text" : "password")" placeholder="可选，用于记录" value="@tcAppId" @onchange='e => UpdateTencentKey(0, e.Value?.ToString() ?? "")' />
+                                    <span class="credential-field-hint">当前生成接口不使用，保留便于和控制台对应。</span>
+                                </label>
+                                <label class="credential-field">
+                                    <span class="credential-field-label">SecretId</span>
+                                    <input type="@(IsPasswordVisible(vid) ? "text" : "password")" placeholder="生成语音必填" value="@tcSecretId" @onchange='e => UpdateTencentKey(1, e.Value?.ToString() ?? "")' />
+                                    <span class="credential-field-hint">腾讯云 API 身份标识。</span>
+                                </label>
+                                <label class="credential-field">
+                                    <span class="credential-field-label">SecretKey</span>
+                                    <input type="@(IsPasswordVisible(vid) ? "text" : "password")" placeholder="生成语音必填" value="@tcSecretKey" @onchange='e => UpdateTencentKey(2, e.Value?.ToString() ?? "")' />
+                                    <span class="credential-field-hint">与 SecretId 配对签名请求。</span>
+                                </label>
+                            </div>
                         </div>
                     }
                     else
                     {
-                        <div style="position:relative; flex:1; display:flex; align-items:center;">
-                            <input type="@(IsPasswordVisible(vid) ? "text" : "password")"
-                                   style="flex:1; padding-right:40px;"
-                                   placeholder="@GetPlaceholder(vid)"
-                                   value="@GetApiKey(vid)"
-                                   @onchange="e => OnApiKeyChanged(vid, e)" />
-                            <button type="button" class="btn btn-outline"
-                                    style="position:absolute; right:4px; top:50%; transform:translateY(-50%); padding:4px; border:none; background:transparent;"
-                                    @onclick="() => TogglePasswordVisibility(vid)">
-                                @if (IsPasswordVisible(vid))
-                                {
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
-                                }
-                                else
-                                {
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                }
-                            </button>
+                        <div class="credential-stack">
+                            <div class="credential-group-header">
+                                <div>
+                                    <strong>@vendor.Name 凭证</strong>
+                                    <span>@GetCredentialHelp(vid)</span>
+                                </div>
+                                <button type="button" class="icon-ghost-btn" @onclick="() => TogglePasswordVisibility(vid)" title="显示/隐藏凭证">
+                                    @if (IsPasswordVisible(vid))
+                                    {
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                                    }
+                                    else
+                                    {
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                    }
+                                </button>
+                            </div>
+                            <label class="credential-field full">
+                                <span class="credential-field-label">API Key / 凭证</span>
+                                <input type="@(IsPasswordVisible(vid) ? "text" : "password")"
+                                       placeholder="@GetPlaceholder(vid)"
+                                       value="@GetApiKey(vid)"
+                                       @onchange="e => OnApiKeyChanged(vid, e)" />
+                                <span class="credential-field-hint">@GetPlaceholder(vid)</span>
+                            </label>
                         </div>
                     }
-                    <button class="btn btn-outline"
-                            style="padding:8px 14px;font-size:12px;white-space:nowrap;"
-                            disabled="@(string.IsNullOrWhiteSpace(GetApiKey(vid)) || IsTestingVendor(vid))"
+                    <button class="btn btn-outline credential-test-btn"
+                            disabled="@(!HasConfiguredCredentials(vid) || IsTestingVendor(vid))"
                             @onclick="() => TestVendor(vid)">
                         @if (IsTestingVendor(vid))
                         {
@@ -108,8 +194,8 @@
                 @if (_testResults.ContainsKey(vid))
                 {
                     var result = _testResults[vid];
-                    <div style="margin-left:168px;margin-top:6px;">
-                        <span style="font-size:13px;color:@(result.Success ? "#4ade80" : "#fca5a5");">
+                    <div class="credential-test-result">
+                        <span style="color:@(result.Success ? "#4ade80" : "#fca5a5");">
                             @result.Message
                         </span>
                     </div>
@@ -122,7 +208,7 @@
         <button class="btn btn-outline" @onclick="GoHome">返回首页</button>
         <button class="btn btn-primary" @onclick="SaveSettings">
             <svg style="width:16px;height:16px;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-            保存配置
+            @(HasFocusedVendor ? "保存并进入工作区" : "保存配置")
         </button>
     </div>
 </div>
@@ -191,6 +277,10 @@
 }
 
 @code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "focus")]
+    public string? FocusVendorId { get; set; }
+
     private Dictionary<string, string> _tempKeys = new();
     private Dictionary<string, (bool Success, string Message)> _testResults = new();
     private HashSet<string> _testingVendors = new();
@@ -198,6 +288,13 @@
     private bool _showSaved = false;
     private string? _copiedVendor = null;
     private System.Threading.CancellationTokenSource? _copyCts;
+    private bool _scrolledToFocus = false;
+
+    private bool HasFocusedVendor =>
+        !string.IsNullOrWhiteSpace(FocusVendorId) && VendorRegistry.GetById(FocusVendorId) != null;
+
+    private bool IsFocusedVendor(string vendorId) =>
+        HasFocusedVendor && string.Equals(FocusVendorId, vendorId, StringComparison.OrdinalIgnoreCase);
 
     protected override void OnInitialized()
     {
@@ -226,9 +323,19 @@
     {
         "baidu" => "格式: api_key|secret_key",
         "azure" => "格式: subscription_key|region（东部亚洲为 eastasia）",
-        "huoshan" => "格式: AppID|AccessToken 或 AppID|AccessToken|Cluster",
+        "huoshan" => "格式: AppID|AccessToken，高级项可填 V3 API Key / ResourceId",
         "tencent" => "格式: AppID|SecretId|SecretKey",
         _ => "此处输入 API 凭证"
+    };
+
+    private string GetCredentialHelp(string vendorId) => vendorId switch
+    {
+        "baidu" => "生成语音必填。请按 api_key|secret_key 填写，两段之间用竖线分隔。",
+        "azure" => "生成语音必填。请按 subscription_key|region 填写，例如 key|eastasia。",
+        "google" => "生成语音必填。填写 Google Cloud Text-to-Speech API Key。",
+        "openai" => "生成语音必填。填写 OpenAI API Key。",
+        "aliyun" => "生成语音必填。填写阿里云百炼 DashScope API Key。",
+        _ => "生成语音必填。请按该厂商要求填写凭证。"
     };
 
     private void OnApiKeyChanged(string vendorId, ChangeEventArgs e)
@@ -240,11 +347,8 @@
 
     private void UpdateHuoshanKey(int index, string value)
     {
-        var current = GetApiKey("huoshan");
-        var parts = current.Split('|').ToList();
-        while (parts.Count < 5) parts.Add("");
-        parts[index] = value;
-        _tempKeys["huoshan"] = string.Join("|", parts).TrimEnd('|');
+        var credentials = GetHuoshanCredentials().WithPart(index, value);
+        _tempKeys["huoshan"] = credentials.ToStorageString();
         _testResults.Remove("huoshan");
     }
 
@@ -278,6 +382,15 @@
         Navigation.NavigateTo("/");
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrolledToFocus && HasFocusedVendor)
+        {
+            _scrolledToFocus = true;
+            await JS.InvokeVoidAsync("voiceOps.scrollIntoView", $"settings-row-{FocusVendorId}");
+        }
+    }
+
     private void OnOutputDirChanged(ChangeEventArgs e)
     {
         SettingsService.Settings.OutputDirectory = e.Value?.ToString() ?? string.Empty;
@@ -291,11 +404,17 @@
         }
         SettingsService.Save();
 
+        var shouldNavigateToWorkspace = HasFocusedVendor && HasConfiguredCredentials(FocusVendorId!);
         _showSaved = true;
         StateHasChanged();
-        await Task.Delay(2000);
+        await Task.Delay(shouldNavigateToWorkspace ? 600 : 2000);
         _showSaved = false;
         StateHasChanged();
+
+        if (shouldNavigateToWorkspace)
+        {
+            Navigation.NavigateTo($"/workspace/{FocusVendorId}");
+        }
     }
 
     private async Task CopyToClipboard(string vendorId, string text)
@@ -318,4 +437,36 @@
         }
         catch (TaskCanceledException) { }
     }
+
+    private HuoshanCredentials GetHuoshanCredentials() =>
+        HuoshanCredentials.Parse(GetApiKey("huoshan"));
+
+    private static string GetHuoshanHelpUrl(int index) => index switch
+    {
+        0 => "https://www.volcengine.com/docs/6561/196768?lang=zh",
+        1 => "https://www.volcengine.com/docs/6561/196768?lang=zh",
+        2 => "https://www.volcengine.com/docs/6561/79823",
+        3 => "https://www.volcengine.com/docs/6291/65568",
+        4 => "https://www.volcengine.com/docs/6291/65568",
+        5 => "https://www.volcengine.com/docs/6561/1816214",
+        6 => "https://www.volcengine.com/docs/6561/1829010?lang=zh",
+        _ => "https://www.volcengine.com/docs/6561/1257536?lang=zh"
+    };
+
+    private static string GetHuoshanHelpTitle(int index) => index switch
+    {
+        0 => "打开火山豆包语音控制台 FAQ，查看 AppID 获取方式",
+        1 => "打开火山豆包语音控制台 FAQ，查看 Access Token 获取方式",
+        2 => "打开火山语音合成参数说明，查看 Cluster 用途",
+        3 => "打开火山 Access Key 管理文档，查看 AK 获取方式",
+        4 => "打开火山 Access Key 管理文档，查看 SK 获取方式",
+        5 => "打开豆包语音 API Key 使用文档",
+        6 => "打开 V3 异步长文本接口文档，查看 ResourceId / 模型字段说明",
+        _ => "打开火山豆包语音文档"
+    };
+
+    private bool HasConfiguredCredentials(string vendorId) =>
+        vendorId == "huoshan"
+            ? HuoshanCredentials.Parse(GetApiKey(vendorId)).HasSpeechCredentials || HuoshanCredentials.Parse(GetApiKey(vendorId)).HasV3ApiKeyCredentials
+            : !string.IsNullOrWhiteSpace(GetApiKey(vendorId));
 }

@@ -15,12 +15,12 @@ copy .env.example .env
 
 2. 编辑 `.env` 文件，填写火山引擎 API Key：
 ```bash
-HUOSHAN_API_KEY=你的AppID|你的Token|volcano_tts|你的AK|你的SK
+HUOSHAN_API_KEY=你的AppID|你的Token
 ```
 
 **获取方式**：
 - AppID + Token: https://console.volcengine.com/speech/service/8
-- AK + SK: https://console.volcengine.com/iam/keymanage
+- AK + SK: https://console.volcengine.com/iam/keymanage（仅刷新全量音色库时需要）
 
 ### 方式 B：使用 OpenAI
 
@@ -124,7 +124,8 @@ ipconfig
 
 3. **API Key 无效**
    - 检查格式是否正确
-   - 火山引擎需要 5 个部分，用 `|` 分隔
+   - 火山引擎生成语音只需要 `AppID|AccessToken`
+   - 刷新全量音色库时才需要高级格式 `AppID|AccessToken|Cluster|AK|SK`
    - 重启服务器以重新加载
 
 ---

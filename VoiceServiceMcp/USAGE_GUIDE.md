@@ -24,8 +24,9 @@ copy .env.example .env
 2. 编辑 `.env` 文件，填写你的 API Keys：
 
 ```bash
-# 火山引擎（必填，格式: AppID|AccessToken|Cluster|AK|SK）
-HUOSHAN_API_KEY=123456|your_access_token|volcano_tts|your_ak|your_sk
+# 火山引擎（生成语音必填，格式: AppID|AccessToken）
+# V3 / 全量音色库高级格式: AppID|AccessToken|Cluster|AK|SK|V3ApiKey|ResourceId
+HUOSHAN_API_KEY=123456|your_access_token
 
 # 其他厂商（可选）
 OPENAI_API_KEY=sk-xxx
@@ -34,7 +35,7 @@ ALIYUN_API_KEY=xxx
 
 **火山引擎 API Key 获取方式**：
 - AppID + AccessToken: [语音技术控制台 -> 应用管理](https://console.volcengine.com/speech/service/8)
-- AK + SK: [API 访问密钥](https://console.volcengine.com/iam/keymanage)
+- AK + SK: [API 访问密钥](https://console.volcengine.com/iam/keymanage)（仅刷新全量音色库时需要）
 
 ### 第 2 步：启动服务器
 
@@ -72,19 +73,23 @@ ipconfig
 
 ### 火山引擎（Volcengine）
 
-格式：`AppID|AccessToken|Cluster|AK|SK`
+生成语音格式：`AppID|AccessToken`
+
+V3 / 全量音色库高级格式：`AppID|AccessToken|Cluster|AK|SK|V3ApiKey|ResourceId`
 
 示例：
 ```
-HUOSHAN_API_KEY=123456|abc123token|volcano_tts|AKIAXXX|SKXXX
+HUOSHAN_API_KEY=123456|abc123token
 ```
 
 **参数说明**：
 - `AppID`: 应用 ID
 - `AccessToken`: 访问令牌
-- `Cluster`: 集群名称（标准 TTS 使用 `volcano_tts`，BigTTS 留空或不填）
-- `AK`: Access Key ID（用于获取音色列表）
-- `SK`: Secret Access Key（用于获取音色列表）
+- `Cluster`: 可选，集群名称（标准 TTS 默认 `volcano_tts`，BigTTS 自动留空）
+- `V3ApiKey`: 可选，新版控制台 API Key；填写后数据面优先使用 `X-Api-Key`
+- `ResourceId`: 可选，默认 `seed-tts-2.0`，1.0 音色可填 `seed-tts-1.0`
+- `AK`: 可选，Access Key ID（仅用于获取全量音色列表）
+- `SK`: 可选，Secret Access Key（仅用于获取全量音色列表）
 
 ### OpenAI
 

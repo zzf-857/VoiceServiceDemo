@@ -2,6 +2,8 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using VoiceService.Shared;
+using SharedHuoshanCredentials = VoiceService.Shared.HuoshanCredentials;
 
 namespace VoiceServiceMcp.Core;
 
@@ -64,24 +66,14 @@ public class TtsService
 
     private async Task<List<VoiceOption>> FetchHuoshanVoicesAsync(string apiKey)
     {
-        var keys = apiKey.Split('|');
-        if (keys.Length < 5 || string.IsNullOrWhiteSpace(keys[3]) || string.IsNullOrWhiteSpace(keys[4]))
+        var credentials = SharedHuoshanCredentials.Parse(apiKey);
+        if (!credentials.HasOpenApiCredentials)
             return new List<VoiceOption>();
 
-        var ak = keys[3];
-        var sk = keys[4];
-
-        var bodyBytes = Encoding.UTF8.GetBytes("{}");
-        var req = new HttpRequestMessage(HttpMethod.Post, "https://open.volcengineapi.com/?Action=ListBigModelTTSTimbres&Version=2025-05-20");
-        req.Content = new ByteArrayContent(bodyBytes);
-        req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "UTF-8" };
-
-        VolcengineSigner.SignRequest(req, ak, sk, "cn-beijing", "speech_saas_prod", bodyBytes);
-
-        var resp = await _httpClient.SendAsync(req);
-        var json = await resp.Content.ReadAsStringAsync();
-
-        if (!resp.IsSuccessStatusCode) return new List<VoiceOption>();
+        var speakerOptions = await FetchHuoshanSpeakersAsync(credentials);
+        var json = await SendHuoshanOpenApiAsync(credentials, "ListBigModelTTSTimbres", "{}");
+        if (string.IsNullOrWhiteSpace(json))
+            return speakerOptions;
 
         var options = new List<VoiceOption>();
         try
@@ -172,7 +164,74 @@ public class TtsService
             }
         }
         catch { }
+        if (speakerOptions.Count == 0)
+            return options;
+
+        var byId = speakerOptions.ToDictionary(v => v.Id, StringComparer.OrdinalIgnoreCase);
+        foreach (var timbre in options)
+        {
+            if (byId.TryGetValue(timbre.Id, out var existing))
+            {
+                if (string.IsNullOrWhiteSpace(existing.SampleUrl))
+                    existing.SampleUrl = timbre.SampleUrl;
+                existing.Emotions = timbre.Emotions;
+                existing.IsBigTTS = true;
+            }
+            else
+            {
+                speakerOptions.Add(timbre);
+            }
+        }
+
+        return speakerOptions;
+    }
+
+    private async Task<List<VoiceOption>> FetchHuoshanSpeakersAsync(SharedHuoshanCredentials credentials)
+    {
+        var json = await SendHuoshanOpenApiAsync(credentials, "ListSpeakers", HuoshanTtsProtocol.Serialize(new { Limit = "100", Page = 1 }));
+        var options = new List<VoiceOption>();
+        if (string.IsNullOrWhiteSpace(json))
+            return options;
+
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("Result", out var result) ||
+            !result.TryGetProperty("Speakers", out var speakers) ||
+            speakers.ValueKind != JsonValueKind.Array)
+            return options;
+
+        foreach (var speaker in speakers.EnumerateArray())
+        {
+            var voiceType = TryGetStr(speaker, "VoiceType", "voice_type", "SpeakerID", "speaker_id") ?? "";
+            if (string.IsNullOrWhiteSpace(voiceType))
+                continue;
+            var resourceId = TryGetStr(speaker, "ResourceID", "ResourceId", "resource_id") ?? "";
+            options.Add(new VoiceOption
+            {
+                Id = voiceType,
+                Name = TryGetStr(speaker, "Name", "name", "SpeakerName", "speaker_name") ?? voiceType,
+                Gender = TryGetStr(speaker, "Gender", "gender"),
+                Language = "中文",
+                SampleUrl = TryGetStr(speaker, "TrialURL", "TrialUrl", "trial_url", "ShortTrialURL", "ShortTrialUrl", "short_trial_url"),
+                Categories = string.IsNullOrWhiteSpace(resourceId) ? new List<string>() : new List<string> { resourceId },
+                IsBigTTS = resourceId.Contains("seed-tts-2.0", StringComparison.OrdinalIgnoreCase)
+            });
+        }
+
         return options;
+    }
+
+    private async Task<string> SendHuoshanOpenApiAsync(SharedHuoshanCredentials credentials, string action, string body)
+    {
+        var bodyBytes = Encoding.UTF8.GetBytes(body);
+        var req = new HttpRequestMessage(HttpMethod.Post, $"https://open.volcengineapi.com/?Action={action}&Version=2025-05-20");
+        req.Content = new ByteArrayContent(bodyBytes);
+        req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "UTF-8" };
+
+        VolcengineSigner.SignRequest(req, credentials.AccessKey, credentials.SecretKey, "cn-beijing", "speech_saas_prod", bodyBytes);
+
+        var resp = await _httpClient.SendAsync(req);
+        var json = await resp.Content.ReadAsStringAsync();
+        return resp.IsSuccessStatusCode ? json : "";
     }
 
     private static string? TryGetStr(JsonElement elem, params string[] names)
@@ -209,25 +268,19 @@ public class TtsService
 
     private async Task<(bool, string)> TestHuoshanAsync(string apiKey)
     {
-        var keys = apiKey.Split('|');
-        if (keys.Length < 2)
-            return (false, "格式错误，应为: AppID|AccessToken 或 AppID|AccessToken|Cluster");
+        var credentials = SharedHuoshanCredentials.Parse(apiKey);
+        if (!credentials.HasSpeechCredentials && !credentials.HasV3ApiKeyCredentials)
+            return (false, "格式错误，应填写 AppID|AccessToken，或在高级项填写 V3 API Key。");
 
-        var appId = keys[0];
-        var token = keys[1];
-        var cluster = keys.Length >= 3 && !string.IsNullOrWhiteSpace(keys[2]) ? keys[2] : "volcano_tts";
+        if (credentials.HasOpenApiCredentials)
+        {
+            var json = await SendHuoshanOpenApiAsync(credentials, "ListSpeakers", HuoshanTtsProtocol.Serialize(new { Limit = "1", Page = 1 }));
+            return string.IsNullOrWhiteSpace(json)
+                ? (false, "控制面 OpenAPI 验证失败，请检查 AK/SK 和语音服务权限。")
+                : (true, "火山引擎控制面连接成功，未发起语音合成。");
+        }
 
-        var body = new { app = new { appid = appId, token = "access_token", cluster = cluster },
-                         user = new { uid = "388808087185088" },
-                         audio = new { voice_type = "zh_female_cancan", encoding = "mp3", speed_ratio = 1.0, volume_ratio = 1.0, pitch_ratio = 1.0 },
-                         request = new { reqid = Guid.NewGuid().ToString(), text = "test", text_type = "plain", operation = "query", with_frontend = 1, frontend_type = "unitTson" } };
-        var req = new HttpRequestMessage(HttpMethod.Post, "https://openspeech.bytedance.com/api/v1/tts");
-        req.Headers.TryAddWithoutValidation("Authorization", $"Bearer;{token}");
-        req.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        var resp = await _httpClient.SendAsync(req);
-        if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized || resp.StatusCode == System.Net.HttpStatusCode.Forbidden)
-            return (false, $"鉴权失败 ({resp.StatusCode})");
-        return (true, "火山引擎 连接成功 ✓");
+        return (true, "火山凭证格式完整。未配置 AK/SK 时，连通测试不会发起语音合成以避免消耗额度。");
     }
 
     private async Task<(bool, string)> TestBaiduAsync(string apiKey)
@@ -353,35 +406,52 @@ public class TtsService
     // ========== 火山引擎 ==========
     private async Task<TtsResult> GenerateHuoshanAsync(TtsRequest request, string apiKey)
     {
-        var keys = apiKey.Split('|');
-        if (keys.Length < 2)
-            return new TtsResult { Success = false, ErrorMessage = "火山引擎 Key 格式应为: AppID|AccessToken 或 AppID|AccessToken|Cluster|AK|SK" };
+        var credentials = SharedHuoshanCredentials.Parse(apiKey);
+        if (!credentials.HasSpeechCredentials && !credentials.HasV3ApiKeyCredentials)
+            return new TtsResult { Success = false, ErrorMessage = "火山引擎凭证格式应为: AppID|AccessToken，或在高级项填写 V3 API Key。" };
 
-        var appId = keys[0];
-        var token = keys[1];
-        
-        var isBigTTS = request.VoiceId.EndsWith("_bigtts") || 
+        if (request.Text.Length > HuoshanTtsProtocol.AsyncTextThreshold)
+        {
+            if (!credentials.HasV3Credentials)
+                return new TtsResult { Success = false, ErrorMessage = "长文本需要火山 V3 凭证，请配置 AppID/AccessToken 或 V3 API Key 与 ResourceId。" };
+            return await GenerateHuoshanLongTextV3Async(request, credentials);
+        }
+
+        if (credentials.HasV3Credentials)
+        {
+            var v3Result = await GenerateHuoshanV3Async(request, credentials);
+            if (v3Result.Success || credentials.HasV3ApiKeyCredentials)
+                return v3Result;
+
+            var legacyResult = await GenerateHuoshanLegacyAsync(request, credentials);
+            return legacyResult.Success ? legacyResult : v3Result;
+        }
+
+        return await GenerateHuoshanLegacyAsync(request, credentials);
+    }
+
+    private async Task<TtsResult> GenerateHuoshanLegacyAsync(TtsRequest request, SharedHuoshanCredentials credentials)
+    {
+        var isBigTTS = request.VoiceId.EndsWith("_bigtts") ||
                        request.VoiceId.EndsWith("_tob") ||
                        request.VoiceId.Contains("_moon_") ||
                        request.VoiceId.Contains("_mars_") ||
                        request.VoiceId.Contains("_wvae_") ||
                        request.VoiceId.StartsWith("ICL_") ||
                        request.VoiceId.StartsWith("multi_");
-        
-        var cluster = isBigTTS 
-            ? "" 
-            : (keys.Length >= 3 && !string.IsNullOrWhiteSpace(keys[2]) ? keys[2] : "volcano_tts");
+
+        var cluster = isBigTTS ? "" : credentials.ClusterOrDefault;
 
         var body = new
         {
-            app = new { appid = appId, token = "access_token", cluster = cluster },
+            app = new { appid = credentials.AppId, token = "access_token", cluster = cluster },
             user = new { uid = "388808087185088" },
             audio = new { voice_type = request.VoiceId, encoding = "mp3", speed_ratio = request.Speed, volume_ratio = 1.0, pitch_ratio = 1.0 },
             request = new { reqid = Guid.NewGuid().ToString(), text = request.Text, text_type = "plain", operation = "query", with_frontend = 1, frontend_type = "unitTson" }
         };
 
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://openspeech.bytedance.com/api/v1/tts");
-        httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer;{token}");
+        httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer;{credentials.AccessToken}");
         httpRequest.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
         var response = await _httpClient.SendAsync(httpRequest);
@@ -412,6 +482,167 @@ public class TtsService
         }
 
         return new TtsResult { Success = false, ErrorMessage = "火山引擎返回结果无法解析 data: " + respJson };
+    }
+
+    private async Task<TtsResult> GenerateHuoshanV3Async(TtsRequest request, SharedHuoshanCredentials credentials)
+    {
+        var requestId = Guid.NewGuid().ToString();
+        var resourceId = HuoshanTtsProtocol.InferResourceId(request.VoiceId, request.ModelId, credentials.ResourceId);
+        var body = HuoshanTtsProtocol.Serialize(HuoshanTtsProtocol.BuildV3RequestBody(
+            request.Text,
+            request.VoiceId,
+            request.Speed,
+            1.0,
+            "voice_ops_mcp"));
+
+        var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://openspeech.bytedance.com/api/v3/tts/unidirectional");
+        HuoshanTtsProtocol.AddV3Headers(httpRequest, credentials, resourceId, requestId);
+        httpRequest.Content = new StringContent(body, Encoding.UTF8, "application/json");
+
+        var response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            return new TtsResult { Success = false, ErrorMessage = $"火山 V3 API 错误 ({response.StatusCode}, reqid={requestId}): {HuoshanTtsProtocol.DescribeHuoshanError(err)}" };
+        }
+
+        var chunks = new List<byte[]>();
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        while (await reader.ReadLineAsync() is { } line)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+            var parsed = HuoshanTtsProtocol.ParseV3StreamLine(line);
+            if (parsed.HasAudio)
+                chunks.Add(parsed.AudioBytes);
+            else if (parsed.IsError)
+                return new TtsResult { Success = false, ErrorMessage = $"火山 V3 合成失败 (reqid={requestId}, code={parsed.Code}): {HuoshanTtsProtocol.DescribeHuoshanError(parsed.ErrorMessage)}" };
+            else if (parsed.IsTerminal)
+                break;
+        }
+
+        if (chunks.Count == 0)
+            return new TtsResult { Success = false, ErrorMessage = $"火山 V3 未返回音频数据 (reqid={requestId})" };
+
+        var filePath = GetOutputFilePath(request.VendorId);
+        await File.WriteAllBytesAsync(filePath, chunks.SelectMany(c => c).ToArray());
+
+        var vendor = VendorRegistry.GetById(request.VendorId);
+        return new TtsResult
+        {
+            Success = true,
+            FilePath = filePath,
+            VendorName = vendor?.Name ?? "",
+            ModelName = request.ModelId,
+            VoiceName = request.VoiceId,
+            Text = request.Text
+        };
+    }
+
+    private async Task<TtsResult> GenerateHuoshanLongTextV3Async(TtsRequest request, SharedHuoshanCredentials credentials)
+    {
+        var requestId = Guid.NewGuid().ToString();
+        var resourceId = HuoshanTtsProtocol.InferResourceId(request.VoiceId, request.ModelId, credentials.ResourceId);
+        var submit = new HttpRequestMessage(HttpMethod.Post, "https://openspeech.bytedance.com/api/v3/tts/submit");
+        HuoshanTtsProtocol.AddV3Headers(submit, credentials, resourceId, requestId);
+        submit.Content = new StringContent(HuoshanTtsProtocol.Serialize(HuoshanTtsProtocol.BuildV3AsyncSubmitBody(
+            request.Text, request.VoiceId, request.Speed, 1.0, "voice_ops_mcp", requestId)), Encoding.UTF8, "application/json");
+
+        var submitResponse = await _httpClient.SendAsync(submit);
+        var submitJson = await submitResponse.Content.ReadAsStringAsync();
+        if (!submitResponse.IsSuccessStatusCode)
+            return new TtsResult { Success = false, ErrorMessage = $"火山 V3 长文本提交失败 ({submitResponse.StatusCode}, reqid={requestId}): {HuoshanTtsProtocol.DescribeHuoshanError(submitJson)}" };
+
+        var taskId = ExtractHuoshanString(submitJson, "task_id");
+        if (string.IsNullOrWhiteSpace(taskId))
+            return new TtsResult { Success = false, ErrorMessage = $"火山 V3 长文本提交结果无法解析 task_id: {submitJson}" };
+
+        for (var attempt = 0; attempt < 30; attempt++)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(attempt == 0 ? 1 : 2));
+            var query = new HttpRequestMessage(HttpMethod.Post, "https://openspeech.bytedance.com/api/v3/tts/query");
+            HuoshanTtsProtocol.AddV3Headers(query, credentials, resourceId, Guid.NewGuid().ToString());
+            query.Content = new StringContent(HuoshanTtsProtocol.Serialize(HuoshanTtsProtocol.BuildV3AsyncQueryBody(taskId)), Encoding.UTF8, "application/json");
+
+            var queryResponse = await _httpClient.SendAsync(query);
+            var queryJson = await queryResponse.Content.ReadAsStringAsync();
+            if (!queryResponse.IsSuccessStatusCode)
+                return new TtsResult { Success = false, ErrorMessage = $"火山 V3 长文本查询失败 ({queryResponse.StatusCode}, task_id={taskId}): {HuoshanTtsProtocol.DescribeHuoshanError(queryJson)}" };
+
+            var status = ExtractHuoshanInt(queryJson, "task_status");
+            if (status == 3)
+                return new TtsResult { Success = false, ErrorMessage = $"火山 V3 长文本任务失败 (task_id={taskId}): {HuoshanTtsProtocol.DescribeHuoshanError(queryJson)}" };
+
+            var audioUrl = ExtractHuoshanString(queryJson, "audio_url");
+            if (status == 2 && !string.IsNullOrWhiteSpace(audioUrl))
+            {
+                var filePath = GetOutputFilePath(request.VendorId);
+                await File.WriteAllBytesAsync(filePath, await _httpClient.GetByteArrayAsync(audioUrl));
+
+                var vendor = VendorRegistry.GetById(request.VendorId);
+                return new TtsResult
+                {
+                    Success = true,
+                    FilePath = filePath,
+                    VendorName = vendor?.Name ?? "",
+                    ModelName = request.ModelId,
+                    VoiceName = request.VoiceId,
+                    Text = request.Text
+                };
+            }
+        }
+
+        return new TtsResult { Success = false, ErrorMessage = $"火山 V3 长文本任务已提交但尚未完成，task_id={taskId}。请稍后查询或缩短文本。" };
+    }
+
+    private static string? ExtractHuoshanString(string json, string propertyName)
+    {
+        using var doc = JsonDocument.Parse(json);
+        return ExtractHuoshanString(doc.RootElement, propertyName);
+    }
+
+    private static string? ExtractHuoshanString(JsonElement elem, string propertyName)
+    {
+        if (elem.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in elem.EnumerateObject())
+            {
+                if (string.Equals(prop.Name, propertyName, StringComparison.OrdinalIgnoreCase) && prop.Value.ValueKind == JsonValueKind.String)
+                    return prop.Value.GetString();
+                var nested = ExtractHuoshanString(prop.Value, propertyName);
+                if (!string.IsNullOrWhiteSpace(nested))
+                    return nested;
+            }
+        }
+        return null;
+    }
+
+    private static int? ExtractHuoshanInt(string json, string propertyName)
+    {
+        using var doc = JsonDocument.Parse(json);
+        return ExtractHuoshanInt(doc.RootElement, propertyName);
+    }
+
+    private static int? ExtractHuoshanInt(JsonElement elem, string propertyName)
+    {
+        if (elem.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in elem.EnumerateObject())
+            {
+                if (string.Equals(prop.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (prop.Value.ValueKind == JsonValueKind.Number && prop.Value.TryGetInt32(out var n))
+                        return n;
+                    if (prop.Value.ValueKind == JsonValueKind.String && int.TryParse(prop.Value.GetString(), out n))
+                        return n;
+                }
+                var nested = ExtractHuoshanInt(prop.Value, propertyName);
+                if (nested.HasValue)
+                    return nested;
+            }
+        }
+        return null;
     }
 
     // ========== 百度 ==========

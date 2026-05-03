@@ -95,6 +95,41 @@
                 }
             }
         };
+
+        window.demoAudioInterop = {
+            play: function (src, dotNetRef) {
+                var player = document.getElementById('demoAudioPlayer');
+                if (!player) return false;
+
+                var notifyEnded = function () {
+                    if (dotNetRef) {
+                        dotNetRef.invokeMethodAsync('OnDemoAudioEnded');
+                    }
+                };
+
+                player.pause();
+                player.src = src;
+                player.onended = notifyEnded;
+                player.onerror = notifyEnded;
+                player.play().catch(notifyEnded);
+                return true;
+            },
+
+            pause: function () {
+                var player = document.getElementById('demoAudioPlayer');
+                if (player) player.pause();
+            }
+        };
+
+        window.voiceOps = {
+            scrollIntoView: function (id) {
+                var element = document.getElementById(id);
+                if (!element) return false;
+
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+        };
     </script>
 </body>
 </html>
