@@ -136,11 +136,11 @@ VoiceServiceDemo/
  └── wwwroot/                # 静态资源、CSS 样式、音频互操作 JS
 ```
 
-更详细的项目地图见 [Docs/PROJECT_STRUCTURE.md](Docs/PROJECT_STRUCTURE.md)。
+更详细的项目地图见 [Docs/project/PROJECT_STRUCTURE.md](Docs/project/PROJECT_STRUCTURE.md)。
 
 ## 近期优化方向
 
-当前项目的完整功能缺口清单见 [Docs/TTS_TOOL_GAP_CHECKLIST_2026-05-02.md](Docs/TTS_TOOL_GAP_CHECKLIST_2026-05-02.md)。优先级较高的方向包括：
+当前项目的完整功能缺口清单见 [Docs/project/TTS_TOOL_GAP_CHECKLIST_2026-05-02.md](Docs/project/TTS_TOOL_GAP_CHECKLIST_2026-05-02.md)。优先级较高的方向包括：
 
 - 扩展更多厂商的在线音色拉取和示例音频数据。
 - 为阿里云、腾讯云、Google 等厂商补齐可视化语气/风格能力。

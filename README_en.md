@@ -136,11 +136,11 @@ VoiceServiceDemo/
  └── wwwroot/                # Static assets, CSS, and audio interop JavaScript
 ```
 
-See [Docs/PROJECT_STRUCTURE.md](Docs/PROJECT_STRUCTURE.md) for a more detailed project map.
+See [Docs/project/PROJECT_STRUCTURE.md](Docs/project/PROJECT_STRUCTURE.md) for a more detailed project map.
 
 ## Roadmap
 
-The current feature gap checklist is tracked in [Docs/TTS_TOOL_GAP_CHECKLIST_2026-05-02.md](Docs/TTS_TOOL_GAP_CHECKLIST_2026-05-02.md). Near-term priorities include:
+The current feature gap checklist is tracked in [Docs/project/TTS_TOOL_GAP_CHECKLIST_2026-05-02.md](Docs/project/TTS_TOOL_GAP_CHECKLIST_2026-05-02.md). Near-term priorities include:
 
 - Expanding online voice fetching and sample audio coverage.
 - Adding visual expression controls for Aliyun, Tencent, Google, and other vendors.

@@ -29,9 +29,9 @@ public sealed class HuoshanTtsProvider
 
         if (credentials.HasOpenApiCredentials)
         {
-            var json = await SendOpenApiAsync(credentials, "ListSpeakers", HuoshanTtsProtocol.Serialize(new { Limit = "1", Page = 1 }));
-            return string.IsNullOrWhiteSpace(json)
-                ? (false, "控制面 OpenAPI 验证失败，请检查 AK/SK 和语音服务权限。")
+            var result = await SendOpenApiAsync(credentials, "ListSpeakers", HuoshanTtsProtocol.Serialize(HuoshanTtsProtocol.BuildListSpeakersBody(1, 1)));
+            return !result.Success
+                ? (false, FormatOpenApiError(result))
                 : (true, "火山引擎控制面连接成功，未发起语音合成。");
         }
 
@@ -106,10 +106,11 @@ public sealed class HuoshanTtsProvider
 
         while (true)
         {
-            var body = HuoshanTtsProtocol.Serialize(new { Limit = limit.ToString(), Page = page });
-            var json = await SendOpenApiAsync(credentials, "ListSpeakers", body);
+            var body = HuoshanTtsProtocol.Serialize(HuoshanTtsProtocol.BuildListSpeakersBody(page, limit));
+            var apiResult = await SendOpenApiAsync(credentials, "ListSpeakers", body);
+            var json = apiResult.Body;
             try { await File.WriteAllTextAsync(Path.Combine(_settingsService.Settings.OutputDirectory, $"huoshan_speakers_page_{page}.json"), json); } catch { }
-            if (string.IsNullOrWhiteSpace(json))
+            if (!apiResult.Success || string.IsNullOrWhiteSpace(json))
                 break;
 
             using var doc = JsonDocument.Parse(json);
@@ -160,11 +161,12 @@ public sealed class HuoshanTtsProvider
 
     private async Task<List<VoiceOption>> FetchBigModelTimbresAsync(SharedHuoshanCredentials credentials)
     {
-        var json = await SendOpenApiAsync(credentials, "ListBigModelTTSTimbres", "{}");
+        var apiResult = await SendOpenApiAsync(credentials, "ListBigModelTTSTimbres", "{}");
+        var json = apiResult.Body;
         try { await File.WriteAllTextAsync(Path.Combine(_settingsService.Settings.OutputDirectory, "huoshan_timbres_debug.json"), json); } catch { }
 
         var options = new List<VoiceOption>();
-        if (string.IsNullOrWhiteSpace(json))
+        if (!apiResult.Success || string.IsNullOrWhiteSpace(json))
             return options;
 
         using var doc = JsonDocument.Parse(json);
@@ -198,7 +200,7 @@ public sealed class HuoshanTtsProvider
             .ToList();
     }
 
-    private async Task<string> SendOpenApiAsync(SharedHuoshanCredentials credentials, string action, string body)
+    private async Task<OpenApiResult> SendOpenApiAsync(SharedHuoshanCredentials credentials, string action, string body)
     {
         var bodyBytes = Encoding.UTF8.GetBytes(body);
         var req = new HttpRequestMessage(HttpMethod.Post, $"https://open.volcengineapi.com/?Action={action}&Version=2025-05-20");
@@ -209,7 +211,39 @@ public sealed class HuoshanTtsProvider
 
         var resp = await _httpClient.SendAsync(req);
         var json = await resp.Content.ReadAsStringAsync();
-        return resp.IsSuccessStatusCode ? json : "";
+        return new OpenApiResult(resp.IsSuccessStatusCode, resp.StatusCode, json);
+    }
+
+    private static string FormatOpenApiError(OpenApiResult result)
+    {
+        var detail = ExtractOpenApiError(result.Body);
+        return string.IsNullOrWhiteSpace(detail)
+            ? $"控制面 OpenAPI 验证失败 ({result.StatusCode})。AK/SK 可能正确，但接口返回了空错误；请检查 IAM 权限、语音服务是否开通，以及 ListSpeakers 接口权限。"
+            : $"控制面 OpenAPI 验证失败 ({result.StatusCode}): {detail}";
+    }
+
+    private static string ExtractOpenApiError(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return "";
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var code = ExtractString(doc.RootElement, "Code");
+            var message = ExtractString(doc.RootElement, "Message");
+            if (!string.IsNullOrWhiteSpace(code) && !string.IsNullOrWhiteSpace(message))
+                return $"{code} - {message}";
+            if (!string.IsNullOrWhiteSpace(code))
+                return code;
+            if (!string.IsNullOrWhiteSpace(message))
+                return message;
+        }
+        catch (JsonException)
+        {
+        }
+
+        return body.Length <= 500 ? body : body[..500] + "...";
     }
 
     private VoiceOption ParseTimbreInfo(string speakerId, JsonElement info)
@@ -275,17 +309,18 @@ public sealed class HuoshanTtsProvider
 
         var cluster = isBigTTS ? "" : credentials.ClusterOrDefault;
 
-        var body = new
-        {
-            app = new { appid = credentials.AppId, token = "access_token", cluster = cluster },
-            user = new { uid = "388808087185088" },
-            audio = new { voice_type = request.VoiceId, encoding = "mp3", speed_ratio = request.Speed, volume_ratio = request.Volume, pitch_ratio = 1.0 },
-            request = new { reqid = Guid.NewGuid().ToString(), text = request.Text, text_type = "plain", operation = "query", with_frontend = 1, frontend_type = "unitTson" }
-        };
+        var body = HuoshanTtsProtocol.BuildLegacyRequestBody(
+            request.Text,
+            request.VoiceId,
+            credentials.AppId,
+            cluster,
+            request.Speed,
+            request.Volume,
+            request.Emotion);
 
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://openspeech.bytedance.com/api/v1/tts");
         httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer;{credentials.AccessToken}");
-        httpRequest.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        httpRequest.Content = new StringContent(HuoshanTtsProtocol.Serialize(body), Encoding.UTF8, "application/json");
 
         var response = await _httpClient.SendAsync(httpRequest);
         var respJson = await response.Content.ReadAsStringAsync();
@@ -306,7 +341,7 @@ public sealed class HuoshanTtsProvider
     private async Task<TtsResult> GenerateV3Async(TtsRequest request, SharedHuoshanCredentials credentials)
     {
         var requestId = Guid.NewGuid().ToString();
-        var resourceId = HuoshanTtsProtocol.InferResourceId(request.VoiceId, request.ModelId, credentials.ResourceId);
+        var resourceId = HuoshanTtsProtocol.InferResourceId(request.VoiceId, request.ModelId, credentials.ResourceId, request.ResourceId);
         var body = HuoshanTtsProtocol.Serialize(HuoshanTtsProtocol.BuildV3RequestBody(
             request.Text,
             request.VoiceId,
@@ -353,7 +388,7 @@ public sealed class HuoshanTtsProvider
     private async Task<TtsResult> GenerateLongTextV3Async(TtsRequest request, SharedHuoshanCredentials credentials)
     {
         var requestId = Guid.NewGuid().ToString();
-        var resourceId = HuoshanTtsProtocol.InferResourceId(request.VoiceId, request.ModelId, credentials.ResourceId);
+        var resourceId = HuoshanTtsProtocol.InferResourceId(request.VoiceId, request.ModelId, credentials.ResourceId, request.ResourceId);
         var submitBody = HuoshanTtsProtocol.Serialize(HuoshanTtsProtocol.BuildV3AsyncSubmitBody(
             request.Text,
             request.VoiceId,
@@ -538,4 +573,6 @@ public sealed class HuoshanTtsProvider
                 return v.GetString();
         return null;
     }
+
+    private sealed record OpenApiResult(bool Success, System.Net.HttpStatusCode StatusCode, string Body);
 }

@@ -98,11 +98,12 @@
   - 建议：音色元数据记录 style support，或按 locale/voice family 配表。
   - 验收：用户只看到当前音色可用的 style。
 
-- [ ] **P1-10 火山 emotion 预设存在猜测成分**
-  - 现状：在线返回 `Emotions` 时可用；未返回时对 BigTTS/BV 使用内置常用 emotion。
-  - 影响：部分音色不支持某 emotion 时会请求失败。
-  - 建议：优先依赖在线音色库，内置预设标记为“实验”，并生成前可选择禁用。
-  - 验收：UI 能区分“官方返回支持”和“通用尝试”。
+- [ ] **P1-10 火山 emotion 能力仍未完整产品化**
+  - 现状：桌面端已经优先使用在线音色库返回的 `Emotions`，并且在线音色未声明 emotion 时不再猜测；内置离线推荐音色仍保留常用 fallback。
+  - 已修正：V3 请求体里的 emotion 已放到 `req_params.audio_params.emotion`；`general` / `neutral` 不再作为实际请求 emotion 发送。
+  - 剩余影响：离线 fallback 仍无法证明账号/音色真实支持；`emotion_scale` 未接入；MCP 生成请求还没有 emotion 入参。
+  - 建议：把离线 fallback 标记为“实验”，新增 emotion 强度字段，并让 MCP schema 复用同一套 emotion/resource 规则。
+  - 验收：UI 能区分“官方返回支持”和“实验尝试”；桌面端与 MCP 都能发送同一套 emotion 参数，并能选择是否传 `emotion_scale`。
 
 - [ ] **P1-11 阿里云 qwen3/CosyVoice 的指令式语气未产品化**
   - 现状：阿里仅文本生成和本地音色库，没有“用温柔语气/播报语气”等指令控件。

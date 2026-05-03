@@ -79,8 +79,11 @@ public static class HuoshanTtsProtocol
     public const string DefaultResourceId = "seed-tts-2.0";
     public const int AsyncTextThreshold = 3000;
 
-    public static string InferResourceId(string voiceId, string modelId, string configuredResourceId = "")
+    public static string InferResourceId(string voiceId, string modelId, string configuredResourceId = "", string voiceResourceId = "")
     {
+        if (!string.IsNullOrWhiteSpace(voiceResourceId))
+            return voiceResourceId.Trim();
+
         if (!string.IsNullOrWhiteSpace(configuredResourceId))
             return configuredResourceId.Trim();
 
@@ -113,9 +116,9 @@ public static class HuoshanTtsProtocol
                     format = "mp3",
                     sample_rate = 24000,
                     speech_rate = ToV3Rate(speed),
-                    loudness_rate = ToV3Rate(volume)
-                },
-                emotion = string.IsNullOrWhiteSpace(emotion) ? null : emotion.Trim()
+                    loudness_rate = ToV3Rate(volume),
+                    emotion = string.IsNullOrWhiteSpace(emotion) ? null : emotion.Trim()
+                }
             }
         };
     }
@@ -135,14 +138,50 @@ public static class HuoshanTtsProtocol
                     format = "mp3",
                     sample_rate = 24000,
                     speech_rate = ToV3Rate(speed),
-                    loudness_rate = ToV3Rate(volume)
-                },
-                emotion = string.IsNullOrWhiteSpace(emotion) ? null : emotion.Trim()
+                    loudness_rate = ToV3Rate(volume),
+                    emotion = string.IsNullOrWhiteSpace(emotion) ? null : emotion.Trim()
+                }
             }
         };
     }
 
     public static object BuildV3AsyncQueryBody(string taskId) => new { task_id = taskId };
+
+    public static object BuildListSpeakersBody(int page, int limit) => new { Limit = limit, Page = page };
+
+    public static object BuildLegacyRequestBody(
+        string text,
+        string voiceId,
+        string appId,
+        string cluster,
+        double speed,
+        double volume,
+        string emotion = "")
+    {
+        return new
+        {
+            app = new { appid = appId, token = "access_token", cluster },
+            user = new { uid = "388808087185088" },
+            audio = new
+            {
+                voice_type = voiceId,
+                encoding = "mp3",
+                speed_ratio = speed,
+                volume_ratio = volume,
+                pitch_ratio = 1.0,
+                emotion = string.IsNullOrWhiteSpace(emotion) ? null : emotion.Trim()
+            },
+            request = new
+            {
+                reqid = Guid.NewGuid().ToString(),
+                text,
+                text_type = "plain",
+                operation = "query",
+                with_frontend = 1,
+                frontend_type = "unitTson"
+            }
+        };
+    }
 
     public static HuoshanV3StreamEvent ParseV3StreamLine(string rawLine)
     {

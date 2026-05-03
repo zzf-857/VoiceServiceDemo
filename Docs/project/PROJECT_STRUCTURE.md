@@ -22,8 +22,11 @@
 
 ## 资料和工具
 
-- `Docs/`：项目文档、供应商接入资料、整理计划。
+- `Docs/`：项目文档根目录，只保留分类文件夹，避免散落单篇文档。
+- `Docs/project/`：项目地图、阶段交接、功能缺口清单等项目级资料。
 - `Docs/features/`：已经完成或正在整理的功能说明。
+- `Docs/providers/`：供应商接入资料。火山引擎 TTS 的权威文档是 `Docs/providers/Volcengine_TTS_Integration_Guide.md`。
+- `Docs/plans/`：实施计划和迁移计划。
 - `data/`：供应商原始数据或解析后的静态数据。
 - `scripts/`：一次性或辅助脚本。
 - `assets/`：设计稿、图标、非代码资源。

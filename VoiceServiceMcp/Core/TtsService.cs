@@ -188,7 +188,7 @@ public class TtsService
 
     private async Task<List<VoiceOption>> FetchHuoshanSpeakersAsync(SharedHuoshanCredentials credentials)
     {
-        var json = await SendHuoshanOpenApiAsync(credentials, "ListSpeakers", HuoshanTtsProtocol.Serialize(new { Limit = "100", Page = 1 }));
+        var json = await SendHuoshanOpenApiAsync(credentials, "ListSpeakers", HuoshanTtsProtocol.Serialize(HuoshanTtsProtocol.BuildListSpeakersBody(1, 100)));
         var options = new List<VoiceOption>();
         if (string.IsNullOrWhiteSpace(json))
             return options;
@@ -274,7 +274,7 @@ public class TtsService
 
         if (credentials.HasOpenApiCredentials)
         {
-            var json = await SendHuoshanOpenApiAsync(credentials, "ListSpeakers", HuoshanTtsProtocol.Serialize(new { Limit = "1", Page = 1 }));
+            var json = await SendHuoshanOpenApiAsync(credentials, "ListSpeakers", HuoshanTtsProtocol.Serialize(HuoshanTtsProtocol.BuildListSpeakersBody(1, 1)));
             return string.IsNullOrWhiteSpace(json)
                 ? (false, "控制面 OpenAPI 验证失败，请检查 AK/SK 和语音服务权限。")
                 : (true, "火山引擎控制面连接成功，未发起语音合成。");

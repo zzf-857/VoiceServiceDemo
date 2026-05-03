@@ -112,6 +112,7 @@ public class TtsRequest
     public string Style { get; set; } = "";
     public double StyleDegree { get; set; } = 1.0;
     public string Emotion { get; set; } = "";
+    public string ResourceId { get; set; } = "";
     public string Role { get; set; } = "";
     public string SsmlText { get; set; } = "";
 }

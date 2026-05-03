@@ -171,13 +171,9 @@
                                 <span class="voice-card-meta">@FormatVoiceMeta(v)</span>
                             </div>
                             <div class="voice-card-tags">
-                                @foreach (var c in v.Categories.Take(2))
+                                @foreach (var c in HuoshanEmotionPolicy.GetDisplayTags(v))
                                 {
                                     <span class="voice-tag">@c</span>
-                                }
-                                @if (v.Emotions.Count > 1)
-                                {
-                                    <span class="voice-tag emotion-tag">@v.Emotions.Count 种情感</span>
                                 }
                             </div>
                         </div>
@@ -233,19 +229,6 @@
                         <strong title="@_selectedVoice.Name">@_selectedVoice.Name</strong>
                         <small>@_selectedVoice.Gender · @_selectedVoice.Age</small>
                     </div>
-                    @if (_selectedVoice.Emotions.Count > 1)
-                    {
-                        <div class="emotion-row">
-                            <span>情感</span>
-                            @foreach (var emo in _selectedVoice.Emotions)
-                            {
-                                <button class="@($"filter-chip {(_selectedEmotion == emo.EmotionType ? "active" : "")}")"
-                                        @onclick="@(() => _selectedEmotion = emo.EmotionType)">
-                                    @emo.Emotion
-                                </button>
-                            }
-                        </div>
-                    }
                 </div>
             }
 
@@ -301,7 +284,7 @@
                         }
                     }
 
-                    @if (IsHuoshan && HuoshanEmotionOptions.Any())
+                    @if (IsHuoshan && HasHuoshanEmotionControls)
                     {
                         <div class="emotion-row">
                             <span>语气</span>
@@ -514,7 +497,9 @@
                 q = q.Where(v => v.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
                                || v.Id.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
             if (!string.IsNullOrEmpty(_filterCategory))
-                q = q.Where(v => v.Categories.Contains(_filterCategory));
+                q = q.Where(v => IsHuoshan
+                    ? HuoshanEmotionPolicy.MatchesCategory(v, _filterCategory)
+                    : v.Categories.Contains(_filterCategory));
             if (!string.IsNullOrEmpty(_filterGender))
                 q = q.Where(v => v.Gender == _filterGender);
             return q;
@@ -525,6 +510,10 @@
     {
         _selectedVoiceId = v.Id;
         _selectedVoiceName = v.Name;
+        var resourceId = HuoshanEmotionPolicy.GetResourceId(v);
+        if (!string.IsNullOrWhiteSpace(resourceId) && _vendor?.DefaultModels.Any(m => m.Id == resourceId) == true)
+            _selectedModelId = resourceId;
+
         // 默认选择 general 或第一个情感
         var emotionOptions = GetHuoshanEmotionOptions(v).ToList();
         _selectedEmotion = emotionOptions.Any(e => e.Id == "neutral") ? "neutral"
@@ -542,20 +531,6 @@
         new TtsExpressionOption { Id = "newscast", Name = "新闻" }
     };
 
-    private static readonly List<TtsExpressionOption> DefaultHuoshanEmotions = new()
-    {
-        new TtsExpressionOption { Id = "neutral", Name = "中性" },
-        new TtsExpressionOption { Id = "happy", Name = "开心" },
-        new TtsExpressionOption { Id = "sad", Name = "悲伤" },
-        new TtsExpressionOption { Id = "angry", Name = "生气" },
-        new TtsExpressionOption { Id = "surprised", Name = "惊讶" },
-        new TtsExpressionOption { Id = "fear", Name = "恐惧" },
-        new TtsExpressionOption { Id = "hate", Name = "厌恶" },
-        new TtsExpressionOption { Id = "excited", Name = "激动" },
-        new TtsExpressionOption { Id = "tender", Name = "温柔" },
-        new TtsExpressionOption { Id = "storytelling", Name = "讲故事" }
-    };
-
     private bool IsAzure => _vendor?.Id == "azure";
     private bool IsHuoshan => _vendor?.Id == "huoshan";
     private bool SupportsExpressionControls => IsAzure || IsHuoshan;
@@ -565,33 +540,14 @@
     private string InputFieldLabel => IsAzure && _inputFormat == TtsInputFormat.Ssml ? "SSML 文本" : "测试文本";
     private string CurrentInputText => IsAzure && _inputFormat == TtsInputFormat.Ssml ? _ssmlText : _inputText;
     private List<TtsExpressionOption> HuoshanEmotionOptions => _selectedVoice == null ? new() : GetHuoshanEmotionOptions(_selectedVoice).ToList();
+    private bool HasHuoshanEmotionControls => _selectedVoice != null && HuoshanEmotionPolicy.HasSelectableEmotionControls(_selectedVoice);
 
     private IEnumerable<TtsExpressionOption> GetHuoshanEmotionOptions(VoiceOption voice)
     {
         if (!IsHuoshan)
             return Enumerable.Empty<TtsExpressionOption>();
 
-        if (voice.Emotions.Any())
-        {
-            return voice.Emotions
-                .Where(e => !string.IsNullOrWhiteSpace(e.EmotionType))
-                .Select(e => new TtsExpressionOption
-                {
-                    Id = e.EmotionType,
-                    Name = string.IsNullOrWhiteSpace(e.Emotion) ? e.EmotionType : e.Emotion
-                })
-                .GroupBy(e => e.Id, StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.First());
-        }
-
-        if (voice.IsBigTTS ||
-            voice.Id.Contains("_bigtts", StringComparison.OrdinalIgnoreCase) ||
-            voice.Id.Contains("_moon_", StringComparison.OrdinalIgnoreCase) ||
-            voice.Id.Contains("_mars_", StringComparison.OrdinalIgnoreCase) ||
-            voice.Id.StartsWith("BV", StringComparison.OrdinalIgnoreCase))
-            return DefaultHuoshanEmotions;
-
-        return Enumerable.Empty<TtsExpressionOption>();
+        return HuoshanEmotionPolicy.GetOptions(voice);
     }
 
     private void SetInputFormat(TtsInputFormat inputFormat)
@@ -941,7 +897,8 @@
             InputFormat = _inputFormat,
             Style = IsAzure ? _selectedStyle : "",
             StyleDegree = _styleDegree,
-            Emotion = IsHuoshan && _selectedEmotion != "neutral" ? _selectedEmotion : "",
+            Emotion = IsHuoshan ? HuoshanEmotionPolicy.ToRequestEmotion(_selectedEmotion) : "",
+            ResourceId = IsHuoshan && _selectedVoice != null ? HuoshanEmotionPolicy.GetResourceId(_selectedVoice) : "",
             SsmlText = IsAzure ? _ssmlText : ""
         };
 
