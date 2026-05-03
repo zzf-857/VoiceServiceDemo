@@ -222,11 +222,7 @@ public class TtsService
         if (keys.Length < 2)
             return new TtsResult { Success = false, ErrorMessage = "Azure Key 格式应为: subscription_key|region (如 xxxxx|eastasia)" };
 
-        var ssml = $@"<speak version='1.0' xml:lang='zh-CN'>
-            <voice name='{request.VoiceId}'>
-                <prosody rate='{request.Speed:0.00}' volume='{request.Volume:0.00}'>{System.Security.SecurityElement.Escape(request.Text)}</prosody>
-            </voice>
-        </speak>";
+        var ssml = AzureSsmlBuilder.Build(request);
 
         var url = $"https://{keys[1]}.tts.speech.microsoft.com/cognitiveservices/v1";
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);

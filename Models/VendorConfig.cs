@@ -69,6 +69,24 @@ public class VoiceOption
 }
 
 /// <summary>
+/// 输入文本格式
+/// </summary>
+public enum TtsInputFormat
+{
+    PlainText,
+    Ssml
+}
+
+/// <summary>
+/// 厂商可映射的表达方式选项
+/// </summary>
+public class TtsExpressionOption
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+}
+
+/// <summary>
 /// 情感信息（音色支持的情感变体）
 /// </summary>
 public class EmotionInfo
@@ -90,6 +108,12 @@ public class TtsRequest
     public string Text { get; set; } = "";
     public double Speed { get; set; } = 1.0;
     public double Volume { get; set; } = 1.0;
+    public TtsInputFormat InputFormat { get; set; } = TtsInputFormat.PlainText;
+    public string Style { get; set; } = "";
+    public double StyleDegree { get; set; } = 1.0;
+    public string Emotion { get; set; } = "";
+    public string Role { get; set; } = "";
+    public string SsmlText { get; set; } = "";
 }
 
 /// <summary>

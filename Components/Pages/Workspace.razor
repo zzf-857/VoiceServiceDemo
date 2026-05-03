@@ -249,6 +249,74 @@
                 </div>
             }
 
+            @if (SupportsExpressionControls)
+            {
+                <div class="expression-panel">
+                    <div class="expression-header">
+                        <span>表达方式</span>
+                        <small>@ExpressionHint</small>
+                    </div>
+
+                    @if (IsAzure)
+                    {
+                        <div class="segmented-control">
+                            <button class="@($"filter-chip {(_inputFormat == TtsInputFormat.PlainText ? "active" : "")}")"
+                                    @onclick="@(() => SetInputFormat(TtsInputFormat.PlainText))">
+                                普通文本
+                            </button>
+                            <button class="@($"filter-chip {(_inputFormat == TtsInputFormat.Ssml ? "active" : "")}")"
+                                    @onclick="@(() => SetInputFormat(TtsInputFormat.Ssml))">
+                                SSML
+                            </button>
+                        </div>
+
+                        @if (_inputFormat == TtsInputFormat.PlainText)
+                        {
+                            <div class="emotion-row">
+                                <span>风格</span>
+                                @foreach (var style in AzureStyles)
+                                {
+                                    <button class="@($"filter-chip {(_selectedStyle == style.Id ? "active" : "")}")"
+                                            @onclick="@(() => _selectedStyle = style.Id)">
+                                        @style.Name
+                                    </button>
+                                }
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(_selectedStyle))
+                            {
+                                <div class="slider-group compact-slider">
+                                    <div class="slider-header">
+                                        <span class="slider-label">风格强度</span>
+                                        <span class="slider-value">@_styleDegree.ToString("0.0")</span>
+                                    </div>
+                                    <input type="range" class="win-slider"
+                                           min="0.5"
+                                           max="2.0"
+                                           step="0.1"
+                                           @bind="_styleDegree"
+                                           @bind:event="oninput" />
+                                </div>
+                            }
+                        }
+                    }
+
+                    @if (IsHuoshan && HuoshanEmotionOptions.Any())
+                    {
+                        <div class="emotion-row">
+                            <span>语气</span>
+                            @foreach (var emotion in HuoshanEmotionOptions)
+                            {
+                                <button class="@($"filter-chip {(_selectedEmotion == emotion.Id ? "active" : "")}")"
+                                        @onclick="@(() => _selectedEmotion = emotion.Id)">
+                                    @emotion.Name
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
             <div class="voice-sliders">
                 @if (_vendor.SpeedDef.IsSupported)
                 {
@@ -284,8 +352,15 @@
             </div>
 
             <div class="form-group">
-                <label class="field-caption">测试文本</label>
-                <textarea class="text-area generation-text" placeholder="输入要转换成语音的测试文本…" @bind="_inputText"></textarea>
+                <label class="field-caption">@InputFieldLabel</label>
+                @if (IsAzure && _inputFormat == TtsInputFormat.Ssml)
+                {
+                    <textarea class="text-area generation-text" placeholder="输入完整 SSML，例如 <speak>...</speak>" @bind="_ssmlText"></textarea>
+                }
+                else
+                {
+                    <textarea class="text-area generation-text" placeholder="输入要转换成语音的测试文本…" @bind="_inputText"></textarea>
+                }
             </div>
 
             <div class="@($"generation-readiness {(CanGenerate ? "ready" : "blocked")}")">
@@ -418,6 +493,10 @@
     private string _filterGender = "";
     private string _selectedVoiceName = "";
     private string _selectedEmotion = "general";
+    private string _selectedStyle = "";
+    private TtsInputFormat _inputFormat = TtsInputFormat.PlainText;
+    private double _styleDegree = 1.0;
+    private string _ssmlText = "";
     private const int VoicePageSize = 36;
     private int _voicePageIndex = 0;
     private VoiceOption? _selectedVoice => _allVoices.FirstOrDefault(v => v.Id == _selectedVoiceId && v.Name == _selectedVoiceName);
@@ -447,8 +526,86 @@
         _selectedVoiceId = v.Id;
         _selectedVoiceName = v.Name;
         // 默认选择 general 或第一个情感
-        _selectedEmotion = v.Emotions.Any(e => e.EmotionType == "general") ? "general"
-                         : v.Emotions.FirstOrDefault()?.EmotionType ?? "general";
+        var emotionOptions = GetHuoshanEmotionOptions(v).ToList();
+        _selectedEmotion = emotionOptions.Any(e => e.Id == "neutral") ? "neutral"
+                         : emotionOptions.FirstOrDefault()?.Id ?? "";
+    }
+
+    private static readonly List<TtsExpressionOption> AzureStyles = new()
+    {
+        new TtsExpressionOption { Id = "", Name = "默认" },
+        new TtsExpressionOption { Id = "cheerful", Name = "愉快" },
+        new TtsExpressionOption { Id = "sad", Name = "悲伤" },
+        new TtsExpressionOption { Id = "angry", Name = "生气" },
+        new TtsExpressionOption { Id = "chat", Name = "聊天" },
+        new TtsExpressionOption { Id = "customerservice", Name = "客服" },
+        new TtsExpressionOption { Id = "newscast", Name = "新闻" }
+    };
+
+    private static readonly List<TtsExpressionOption> DefaultHuoshanEmotions = new()
+    {
+        new TtsExpressionOption { Id = "neutral", Name = "中性" },
+        new TtsExpressionOption { Id = "happy", Name = "开心" },
+        new TtsExpressionOption { Id = "sad", Name = "悲伤" },
+        new TtsExpressionOption { Id = "angry", Name = "生气" },
+        new TtsExpressionOption { Id = "surprised", Name = "惊讶" },
+        new TtsExpressionOption { Id = "fear", Name = "恐惧" },
+        new TtsExpressionOption { Id = "hate", Name = "厌恶" },
+        new TtsExpressionOption { Id = "excited", Name = "激动" },
+        new TtsExpressionOption { Id = "tender", Name = "温柔" },
+        new TtsExpressionOption { Id = "storytelling", Name = "讲故事" }
+    };
+
+    private bool IsAzure => _vendor?.Id == "azure";
+    private bool IsHuoshan => _vendor?.Id == "huoshan";
+    private bool SupportsExpressionControls => IsAzure || IsHuoshan;
+    private string ExpressionHint => IsAzure
+        ? "Azure 使用 SSML 或 speaking style 控制语气"
+        : "火山使用音色支持的 emotion 参数控制语气";
+    private string InputFieldLabel => IsAzure && _inputFormat == TtsInputFormat.Ssml ? "SSML 文本" : "测试文本";
+    private string CurrentInputText => IsAzure && _inputFormat == TtsInputFormat.Ssml ? _ssmlText : _inputText;
+    private List<TtsExpressionOption> HuoshanEmotionOptions => _selectedVoice == null ? new() : GetHuoshanEmotionOptions(_selectedVoice).ToList();
+
+    private IEnumerable<TtsExpressionOption> GetHuoshanEmotionOptions(VoiceOption voice)
+    {
+        if (!IsHuoshan)
+            return Enumerable.Empty<TtsExpressionOption>();
+
+        if (voice.Emotions.Any())
+        {
+            return voice.Emotions
+                .Where(e => !string.IsNullOrWhiteSpace(e.EmotionType))
+                .Select(e => new TtsExpressionOption
+                {
+                    Id = e.EmotionType,
+                    Name = string.IsNullOrWhiteSpace(e.Emotion) ? e.EmotionType : e.Emotion
+                })
+                .GroupBy(e => e.Id, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First());
+        }
+
+        if (voice.IsBigTTS ||
+            voice.Id.Contains("_bigtts", StringComparison.OrdinalIgnoreCase) ||
+            voice.Id.Contains("_moon_", StringComparison.OrdinalIgnoreCase) ||
+            voice.Id.Contains("_mars_", StringComparison.OrdinalIgnoreCase) ||
+            voice.Id.StartsWith("BV", StringComparison.OrdinalIgnoreCase))
+            return DefaultHuoshanEmotions;
+
+        return Enumerable.Empty<TtsExpressionOption>();
+    }
+
+    private void SetInputFormat(TtsInputFormat inputFormat)
+    {
+        _inputFormat = inputFormat;
+        if (_inputFormat == TtsInputFormat.Ssml && string.IsNullOrWhiteSpace(_ssmlText))
+            _ssmlText = BuildAzureSsmlStarter();
+    }
+
+    private string BuildAzureSsmlStarter()
+    {
+        var voice = string.IsNullOrWhiteSpace(_selectedVoiceId) ? "zh-CN-XiaoxiaoNeural" : _selectedVoiceId;
+        var text = string.IsNullOrWhiteSpace(_inputText) ? "你好，欢迎使用 VoiceOps。" : _inputText;
+        return $"""<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="zh-CN"><voice name="{voice}">{text}</voice></speak>""";
     }
 
     private string _playingDemoVoiceId = "";
@@ -636,6 +793,10 @@
         {
             _speed = _vendor.SpeedDef.Default;
             _volume = _vendor.VolumeDef.Default;
+            _inputFormat = TtsInputFormat.PlainText;
+            _selectedStyle = "";
+            _styleDegree = 1.0;
+            _ssmlText = "";
 
             // 支持在线获取的厂商：尝试从本地缓存加载
             if (_vendor.SupportsVoiceFetch)
@@ -758,7 +919,7 @@
     /// </summary>
     private async Task Generate()
     {
-        if (_vendor == null || string.IsNullOrWhiteSpace(_inputText) || string.IsNullOrEmpty(_selectedVoiceId)) return;
+        if (_vendor == null || string.IsNullOrWhiteSpace(CurrentInputText) || string.IsNullOrEmpty(_selectedVoiceId)) return;
 
         // Step 1: 重置状态
         _isGenerating = true;
@@ -776,7 +937,12 @@
             VoiceId = _selectedVoiceId,
             Text = _inputText,
             Speed = _speed,
-            Volume = _volume
+            Volume = _volume,
+            InputFormat = _inputFormat,
+            Style = IsAzure ? _selectedStyle : "",
+            StyleDegree = _styleDegree,
+            Emotion = IsHuoshan && _selectedEmotion != "neutral" ? _selectedEmotion : "",
+            SsmlText = IsAzure ? _ssmlText : ""
         };
 
         _result = await TtsService.GenerateAsync(request);
@@ -971,13 +1137,13 @@
         return string.Join(" · ", parts);
     }
 
-    private int InputTextLength => string.IsNullOrWhiteSpace(_inputText) ? 0 : _inputText.Trim().Length;
+    private int InputTextLength => string.IsNullOrWhiteSpace(CurrentInputText) ? 0 : CurrentInputText.Trim().Length;
 
     private bool CanGenerate =>
         !_isGenerating &&
         _vendor != null &&
         _selectedVoice != null &&
-        !string.IsNullOrWhiteSpace(_inputText);
+        !string.IsNullOrWhiteSpace(CurrentInputText);
 
     private string GenerateReadinessMessage
     {
@@ -986,7 +1152,7 @@
             if (_isGenerating) return "正在生成语音，请稍候";
             if (_vendor == null) return "当前厂商不可用";
             if (_selectedVoice == null) return "请先选择一个音色";
-            if (string.IsNullOrWhiteSpace(_inputText)) return "请输入要合成的文本";
+            if (string.IsNullOrWhiteSpace(CurrentInputText)) return IsAzure && _inputFormat == TtsInputFormat.Ssml ? "请输入完整 SSML 文本" : "请输入要合成的文本";
             return $"准备使用 {_selectedVoice.Name} 生成语音";
         }
     }

@@ -312,7 +312,8 @@ public sealed class HuoshanTtsProvider
             request.VoiceId,
             request.Speed,
             request.Volume,
-            "voice_ops"));
+            "voice_ops",
+            request.Emotion));
 
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://openspeech.bytedance.com/api/v3/tts/unidirectional");
         HuoshanTtsProtocol.AddV3Headers(httpRequest, credentials, resourceId, requestId);
@@ -359,7 +360,8 @@ public sealed class HuoshanTtsProvider
             request.Speed,
             request.Volume,
             "voice_ops",
-            requestId));
+            requestId,
+            request.Emotion));
 
         var submit = new HttpRequestMessage(HttpMethod.Post, "https://openspeech.bytedance.com/api/v3/tts/submit");
         HuoshanTtsProtocol.AddV3Headers(submit, credentials, resourceId, requestId);

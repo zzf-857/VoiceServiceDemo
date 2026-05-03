@@ -16,16 +16,17 @@ public static class VendorRegistry
             Name = "火山引擎",
             Description = "字节跳动旗下的大模型语音合成服务，支持极高自然度的中文语音。",
             IconName = "flame",
-            ApiBaseUrl = "https://openspeech.bytedance.com/api/v1/tts",
-            DocumentationUrl = "https://www.volcengine.com/docs/6561/79823",
+            ApiBaseUrl = "https://openspeech.bytedance.com/api/v3/tts/unidirectional",
+            DocumentationUrl = "https://www.volcengine.com/docs/6561/1257536",
             SpeedDef = new TtsParameterDef { Min = 0.5, Max = 2.0, Default = 1.0, Step = 0.1 },
             VolumeDef = new TtsParameterDef { Min = 0.1, Max = 3.0, Default = 1.0, Step = 0.1 },
             SupportsModelFetch = false,
             SupportsVoiceFetch = true,
             DefaultModels = new()
             {
-                new VoiceModel { Id = "volcano_tts", Name = "火山 TTS 标准版" },
-                new VoiceModel { Id = "volcano_mega_tts", Name = "火山 MegaTTS 大模型" }
+                new VoiceModel { Id = "seed-tts-2.0", Name = "豆包语音合成模型 2.0" },
+                new VoiceModel { Id = "seed-tts-1.0", Name = "豆包语音合成模型 1.0" },
+                new VoiceModel { Id = "legacy-v1", Name = "旧版 /api/v1/tts 兼容" }
             },
             DefaultVoices = new()
             {

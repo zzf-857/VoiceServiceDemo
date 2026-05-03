@@ -37,8 +37,9 @@ cp .env.example .env
 编辑 `.env` 文件，填写你的 API Key：
 
 ```bash
-# 火山引擎（格式: AppID|AccessToken|Cluster|AK|SK）
-HUOSHAN_API_KEY=123456|your_token|volcano_tts|your_ak|your_sk
+# 火山引擎（生成语音格式: AppID|AccessToken）
+# V3 / 全量音色库高级格式: AppID|AccessToken|Cluster|AK|SK|V3ApiKey|ResourceId
+HUOSHAN_API_KEY=123456|your_token
 
 # OpenAI
 OPENAI_API_KEY=sk-xxx

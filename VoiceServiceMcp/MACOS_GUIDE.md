@@ -41,8 +41,9 @@ nano .env
 
 填写 API Keys：
 ```bash
-# 火山引擎（格式: AppID|AccessToken|Cluster|AK|SK）
-HUOSHAN_API_KEY=123456|your_token|volcano_tts|your_ak|your_sk
+# 火山引擎（生成语音格式: AppID|AccessToken）
+# 如需刷新全量音色库，可用高级格式 AppID|AccessToken|Cluster|AK|SK
+HUOSHAN_API_KEY=123456|your_token
 
 # OpenAI
 OPENAI_API_KEY=sk-xxx
