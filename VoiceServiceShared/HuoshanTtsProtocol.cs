@@ -102,7 +102,7 @@ public static class HuoshanTtsProtocol
         return DefaultResourceId;
     }
 
-    public static object BuildV3RequestBody(string text, string speaker, double speed, double volume, string uid, string emotion = "")
+    public static object BuildV3RequestBody(string text, string speaker, double speed, double volume, string uid, string emotion = "", string outputFormat = "")
     {
         return new
         {
@@ -113,7 +113,7 @@ public static class HuoshanTtsProtocol
                 speaker,
                 audio_params = new
                 {
-                    format = "mp3",
+                    format = NormalizeOutputFormat(outputFormat),
                     sample_rate = 24000,
                     speech_rate = ToV3Rate(speed),
                     loudness_rate = ToV3Rate(volume),
@@ -123,7 +123,7 @@ public static class HuoshanTtsProtocol
         };
     }
 
-    public static object BuildV3AsyncSubmitBody(string text, string speaker, double speed, double volume, string uid, string uniqueId, string emotion = "")
+    public static object BuildV3AsyncSubmitBody(string text, string speaker, double speed, double volume, string uid, string uniqueId, string emotion = "", string outputFormat = "")
     {
         return new
         {
@@ -135,7 +135,7 @@ public static class HuoshanTtsProtocol
                 speaker,
                 audio_params = new
                 {
-                    format = "mp3",
+                    format = NormalizeOutputFormat(outputFormat),
                     sample_rate = 24000,
                     speech_rate = ToV3Rate(speed),
                     loudness_rate = ToV3Rate(volume),
@@ -156,7 +156,8 @@ public static class HuoshanTtsProtocol
         string cluster,
         double speed,
         double volume,
-        string emotion = "")
+        string emotion = "",
+        string outputFormat = "")
     {
         return new
         {
@@ -165,7 +166,7 @@ public static class HuoshanTtsProtocol
             audio = new
             {
                 voice_type = voiceId,
-                encoding = "mp3",
+                encoding = NormalizeOutputFormat(outputFormat),
                 speed_ratio = speed,
                 volume_ratio = volume,
                 pitch_ratio = 1.0,
@@ -243,6 +244,20 @@ public static class HuoshanTtsProtocol
 
     public static string Serialize(object value) =>
         JsonSerializer.Serialize(value, new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
+
+    public static string GetOutputFormatExtension(string outputFormat) =>
+        NormalizeOutputFormat(outputFormat) switch
+        {
+            "ogg_opus" => ".ogg",
+            "pcm" => ".pcm",
+            _ => ".mp3"
+        };
+
+    private static string NormalizeOutputFormat(string outputFormat)
+    {
+        var normalized = (outputFormat ?? "").Trim().ToLowerInvariant();
+        return normalized is "mp3" or "pcm" or "ogg_opus" ? normalized : "mp3";
+    }
 
     private static int ToV3Rate(double ratio) =>
         (int)Math.Round((Math.Clamp(ratio, 0.5, 2.0) - 1.0) * 100);

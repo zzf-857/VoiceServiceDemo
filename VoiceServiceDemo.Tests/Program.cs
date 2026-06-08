@@ -123,6 +123,36 @@ var huoshanNeutralBody = HuoshanTtsProtocol.BuildV3RequestBody(
 var huoshanNeutralJson = HuoshanTtsProtocol.Serialize(huoshanNeutralBody);
 AssertFalse(huoshanNeutralJson.Contains("\"emotion\""), "Huoshan V3 request omits empty emotion");
 
+var huoshanOggBody = HuoshanTtsProtocol.BuildV3RequestBody(
+    "今天真开心。",
+    "zh_female_wenrouxiaoya_moon_bigtts",
+    1.0,
+    1.0,
+    "voice_ops",
+    outputFormat: "ogg_opus");
+using (var huoshanOggDoc = JsonDocument.Parse(HuoshanTtsProtocol.Serialize(huoshanOggBody)))
+{
+    AssertTrue(
+        TryGetNested(huoshanOggDoc.RootElement, out var v3Format, "req_params", "audio_params", "format"),
+        "Huoshan V3 request includes audio format under audio_params");
+    AssertEqual("ogg_opus", v3Format.GetString(), "Huoshan V3 request sends selected output format");
+}
+
+var huoshanInvalidFormatBody = HuoshanTtsProtocol.BuildV3RequestBody(
+    "默认格式。",
+    "zh_female_wenrouxiaoya_moon_bigtts",
+    1.0,
+    1.0,
+    "voice_ops",
+    outputFormat: "unsupported");
+using (var huoshanInvalidFormatDoc = JsonDocument.Parse(HuoshanTtsProtocol.Serialize(huoshanInvalidFormatBody)))
+{
+    AssertEqual(
+        "mp3",
+        huoshanInvalidFormatDoc.RootElement.GetProperty("req_params").GetProperty("audio_params").GetProperty("format").GetString(),
+        "Huoshan V3 request falls back to mp3 for unsupported format");
+}
+
 var huoshanLegacyEmotionBody = HuoshanTtsProtocol.BuildLegacyRequestBody(
     "今天真开心。",
     "zh_female_wenrouxiaoya_moon_bigtts",
@@ -130,9 +160,11 @@ var huoshanLegacyEmotionBody = HuoshanTtsProtocol.BuildLegacyRequestBody(
     "",
     1.0,
     1.0,
-    "happy");
+    "happy",
+    "pcm");
 var huoshanLegacyEmotionJson = HuoshanTtsProtocol.Serialize(huoshanLegacyEmotionBody);
 AssertTrue(huoshanLegacyEmotionJson.Contains("\"emotion\":\"happy\""), "Huoshan legacy request includes selected emotion when V3 falls back");
+AssertTrue(huoshanLegacyEmotionJson.Contains("\"encoding\":\"pcm\""), "Huoshan legacy request sends selected output format");
 
 var huoshanAsyncEmotionBody = HuoshanTtsProtocol.BuildV3AsyncSubmitBody(
     "这是一段长文本。",
@@ -141,7 +173,8 @@ var huoshanAsyncEmotionBody = HuoshanTtsProtocol.BuildV3AsyncSubmitBody(
     1.0,
     "voice_ops",
     "req-123",
-    "storytelling");
+    "storytelling",
+    "pcm");
 var huoshanAsyncEmotionJson = HuoshanTtsProtocol.Serialize(huoshanAsyncEmotionBody);
 using (var huoshanAsyncEmotionDoc = JsonDocument.Parse(huoshanAsyncEmotionJson))
 {
@@ -152,7 +185,15 @@ using (var huoshanAsyncEmotionDoc = JsonDocument.Parse(huoshanAsyncEmotionJson))
     AssertFalse(
         TryGetNested(huoshanAsyncEmotionDoc.RootElement, out _, "req_params", "emotion"),
         "Huoshan async V3 request does not place emotion beside audio_params");
+    AssertEqual(
+        "pcm",
+        huoshanAsyncEmotionDoc.RootElement.GetProperty("req_params").GetProperty("audio_params").GetProperty("format").GetString(),
+        "Huoshan async V3 request sends selected output format");
 }
+
+AssertEqual(".ogg", HuoshanTtsProtocol.GetOutputFormatExtension("ogg_opus"), "Huoshan OGG Opus output uses ogg extension");
+AssertEqual(".pcm", HuoshanTtsProtocol.GetOutputFormatExtension("pcm"), "Huoshan PCM output uses pcm extension");
+AssertEqual(".mp3", HuoshanTtsProtocol.GetOutputFormatExtension("unknown"), "Huoshan output extension falls back to mp3");
 
 var huoshanListSpeakersJson = HuoshanTtsProtocol.Serialize(HuoshanTtsProtocol.BuildListSpeakersBody(1, 100));
 AssertTrue(huoshanListSpeakersJson.Contains("\"Limit\":100"), "Huoshan ListSpeakers request sends numeric Limit");
@@ -676,6 +717,8 @@ AssertTrue(
         link.Label == "豆包语音体验" &&
         link.Url == "https://console.volcengine.com/speech/new/overview?projectName=default"),
     "Huoshan vendor exposes the Doubao speech experience entry as an important link");
+AssertTrue(huoshanVendor.Capabilities.SupportedOutputFormats.Contains("pcm"), "Huoshan vendor exposes PCM output format");
+AssertTrue(huoshanVendor.Capabilities.SupportedOutputFormats.Contains("ogg_opus"), "Huoshan vendor exposes OGG Opus output format");
 
 Console.WriteLine("Vendor important link registry tests passed.");
 

@@ -41,7 +41,8 @@ public static class VendorRegistry
             },
             Capabilities = new VendorCapabilities
             {
-                SupportsEmotion = true
+                SupportsEmotion = true,
+                SupportedOutputFormats = new() { "mp3", "pcm", "ogg_opus" }
             },
             SpeedDef = new TtsParameterDef { Min = 0.5, Max = 2.0, Default = 1.0, Step = 0.1 },
             VolumeDef = new TtsParameterDef { Min = 0.1, Max = 3.0, Default = 1.0, Step = 0.1 },

@@ -316,7 +316,8 @@ public sealed class HuoshanTtsProvider
             cluster,
             request.Speed,
             request.Volume,
-            request.Emotion);
+            request.Emotion,
+            request.OutputFormat);
 
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://openspeech.bytedance.com/api/v1/tts");
         httpRequest.Headers.TryAddWithoutValidation("Authorization", $"Bearer;{credentials.AccessToken}");
@@ -348,7 +349,8 @@ public sealed class HuoshanTtsProvider
             request.Speed,
             request.Volume,
             "voice_ops",
-            request.Emotion));
+            request.Emotion,
+            request.OutputFormat));
 
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://openspeech.bytedance.com/api/v3/tts/unidirectional");
         HuoshanTtsProtocol.AddV3Headers(httpRequest, credentials, resourceId, requestId);
@@ -396,7 +398,8 @@ public sealed class HuoshanTtsProvider
             request.Volume,
             "voice_ops",
             requestId,
-            request.Emotion));
+            request.Emotion,
+            request.OutputFormat));
 
         var submit = new HttpRequestMessage(HttpMethod.Post, "https://openspeech.bytedance.com/api/v3/tts/submit");
         HuoshanTtsProtocol.AddV3Headers(submit, credentials, resourceId, requestId);
@@ -441,7 +444,7 @@ public sealed class HuoshanTtsProvider
 
     private async Task<TtsResult> SaveAudioBytesAsync(byte[] audioBytes, TtsRequest request)
     {
-        var filePath = GetOutputFilePath(request.VendorId);
+        var filePath = GetOutputFilePath(request.VendorId, request.OutputFormat);
         await File.WriteAllBytesAsync(filePath, audioBytes);
 
         var vendor = VendorRegistry.GetById(request.VendorId);
@@ -456,11 +459,11 @@ public sealed class HuoshanTtsProvider
         };
     }
 
-    private string GetOutputFilePath(string vendorId)
+    private string GetOutputFilePath(string vendorId, string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
         Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"{vendorId}_{DateTime.Now:yyyyMMdd_HHmmss}.mp3");
+        return Path.Combine(dir, $"{vendorId}_{DateTime.Now:yyyyMMdd_HHmmss}{HuoshanTtsProtocol.GetOutputFormatExtension(outputFormat)}");
     }
 
     private static JsonElement TryGetArray(JsonElement elem, params string[] names)
