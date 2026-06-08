@@ -10,6 +10,14 @@
 
 ## 2026-06-09 迭代记录
 
+- [x] **接入 ElevenLabs TTS HTTP 生成与在线音色库**
+  - 已完成：新增 `ElevenLabsTtsProvider`，按官方接口调用 `POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}`，使用 `xi-api-key` 鉴权，通过 `output_format` 查询参数选择输出格式，并将返回的音频字节直接落盘。
+  - 已完成：ElevenLabs 注册表新增 `eleven_multilingual_v2`、`eleven_flash_v2_5`、`eleven_turbo_v2_5` 等模型，预置官方示例音色，并声明 `mp3_44100_128` / `opus_48000_32` / `pcm_16000` / `ulaw_8000` 输出格式。
+  - 已完成：接入 `GET https://api.elevenlabs.io/v2/voices` 在线音色库刷新，解析 `voice_id`、`name`、`category`、`labels`、`preview_url` 和 `verified_languages` 为桌面端 `VoiceOption`。
+  - 已完成：Settings 增加 `ELEVENLABS_API_KEY` 凭证文案，首页增加 ElevenLabs 官方 SVG favicon 作为本地真实品牌图标。
+  - 已验证：新增自检覆盖 ElevenLabs 请求体、官方输出格式回落、fake HTTP 生成落盘、`xi-api-key` 请求头、在线音色解析/拉取、注册表能力和 Workspace/Settings/Home 标记；自检与解决方案构建通过。
+  - 关联缺口：继续推进“接入更多厂商 API TTS 生成能力”和 P0-01/P1-07/P2-11；更细的 stability、similarity_boost、style、speaker boost、seed、previous/next text 和在线模型刷新暂未接入，后续需扩展统一高级参数面板。
+
 - [x] **接入 MiniMax T2A HTTP TTS 生成与在线音色库**
   - 已完成：新增 `MiniMaxTtsProvider`，按官方 T2A HTTP 接口调用 `https://api.minimax.io/v1/t2a_v2`，使用 Bearer API Key 鉴权，非流式请求 `output_format=hex`，从 `data.audio` 解码 hex 音频并落盘。
   - 已完成：MiniMax 注册表新增 `speech-2.8-hd`、`speech-2.8-turbo` 等模型，预置中文、英文、日文系统音色，并声明 `mp3` / `wav` / `flac` / `pcm` 输出格式。

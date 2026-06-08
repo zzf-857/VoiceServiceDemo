@@ -959,6 +959,139 @@ AssertTrue(miniMaxVoiceHandler.RequestBodies[0].Contains("\"voice_type\":\"all\"
 
 Console.WriteLine("MiniMax provider request body and voice parser tests passed.");
 
+var elevenLabsRequestJson = ElevenLabsTtsProvider.BuildTextToSpeechRequestJson(new TtsRequest
+{
+    VendorId = "elevenlabs",
+    ModelId = "eleven_multilingual_v2",
+    VoiceId = "JBFqnCBsd6RMkjVDRZzb",
+    Text = "The first move is what sets everything in motion.",
+    Speed = 1.25,
+    OutputFormat = "pcm_16000"
+});
+using (var elevenLabsRequestDoc = JsonDocument.Parse(elevenLabsRequestJson))
+{
+    AssertEqual("The first move is what sets everything in motion.", elevenLabsRequestDoc.RootElement.GetProperty("text").GetString(), "ElevenLabs request preserves synthesis text");
+    AssertEqual("eleven_multilingual_v2", elevenLabsRequestDoc.RootElement.GetProperty("model_id").GetString(), "ElevenLabs request sends selected model");
+    var voiceSettings = elevenLabsRequestDoc.RootElement.GetProperty("voice_settings");
+    AssertEqual(0.5, voiceSettings.GetProperty("stability").GetDouble(), "ElevenLabs request sends stable default stability");
+    AssertEqual(0.75, voiceSettings.GetProperty("similarity_boost").GetDouble(), "ElevenLabs request sends stable default similarity boost");
+    AssertEqual(0, voiceSettings.GetProperty("style").GetDouble(), "ElevenLabs request keeps style exaggeration neutral by default");
+    AssertTrue(voiceSettings.GetProperty("use_speaker_boost").GetBoolean(), "ElevenLabs request enables speaker boost");
+    AssertEqual(1.25, voiceSettings.GetProperty("speed").GetDouble(), "ElevenLabs request maps desktop speed to voice_settings.speed");
+}
+
+var elevenLabsFallbackJson = ElevenLabsTtsProvider.BuildTextToSpeechRequestJson(new TtsRequest
+{
+    VendorId = "elevenlabs",
+    Text = "Fallback ElevenLabs request.",
+    Speed = 8,
+    OutputFormat = "unsupported"
+});
+using (var elevenLabsFallbackDoc = JsonDocument.Parse(elevenLabsFallbackJson))
+{
+    AssertEqual("eleven_multilingual_v2", elevenLabsFallbackDoc.RootElement.GetProperty("model_id").GetString(), "ElevenLabs request falls back to default model");
+    AssertEqual(2.0, elevenLabsFallbackDoc.RootElement.GetProperty("voice_settings").GetProperty("speed").GetDouble(), "ElevenLabs request clamps overly high speed");
+    AssertEqual("mp3_44100_128", ElevenLabsTtsProvider.NormalizeOutputFormat("unsupported"), "ElevenLabs output format falls back to official default MP3");
+}
+
+AssertEqual(".mp3", ElevenLabsTtsProvider.GetOutputFormatExtension("mp3_44100_128"), "ElevenLabs MP3 output uses mp3 extension");
+AssertEqual(".opus", ElevenLabsTtsProvider.GetOutputFormatExtension("opus_48000_32"), "ElevenLabs Opus output uses opus extension");
+AssertEqual(".pcm", ElevenLabsTtsProvider.GetOutputFormatExtension("pcm_16000"), "ElevenLabs PCM output uses pcm extension");
+AssertEqual(".ulaw", ElevenLabsTtsProvider.GetOutputFormatExtension("ulaw_8000"), "ElevenLabs u-law output uses ulaw extension");
+
+var elevenLabsAudioBytes = new byte[] { 1, 2, 3, 4, 255 };
+var elevenLabsSettings = new SettingsService();
+elevenLabsSettings.Settings.OutputDirectory = Path.Combine(Path.GetTempPath(), "VoiceServiceDemoTests", Guid.NewGuid().ToString("N"));
+var elevenLabsHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new ByteArrayContent(elevenLabsAudioBytes)
+    });
+var elevenLabsResult = await new ElevenLabsTtsProvider(new HttpClient(elevenLabsHandler), elevenLabsSettings)
+    .GenerateAsync(new TtsRequest
+    {
+        VendorId = "elevenlabs",
+        ModelId = "eleven_flash_v2_5",
+        VoiceId = "JBFqnCBsd6RMkjVDRZzb",
+        Text = "Save ElevenLabs audio.",
+        Speed = 0.9,
+        OutputFormat = "opus_48000_32"
+    }, "eleven-key");
+AssertTrue(elevenLabsResult.Success, "ElevenLabs fake generation succeeds");
+AssertTrue(elevenLabsResult.FilePath?.EndsWith(".opus", StringComparison.OrdinalIgnoreCase) == true, "ElevenLabs Opus generation saves opus file");
+AssertTrue(File.Exists(elevenLabsResult.FilePath!), "ElevenLabs fake generation writes output file");
+AssertEqual(5L, new FileInfo(elevenLabsResult.FilePath!).Length, "ElevenLabs fake generation writes returned audio bytes");
+AssertTrue(
+    elevenLabsHandler.RequestUris[0]?.AbsoluteUri == "https://api.elevenlabs.io/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb?output_format=opus_48000_32",
+    "ElevenLabs generation uses official text-to-speech endpoint and output_format query");
+AssertEqual("eleven-key", elevenLabsHandler.RequestHeaderValues[0]["xi-api-key"], "ElevenLabs generation sends xi-api-key header");
+AssertTrue(elevenLabsHandler.RequestBodies[0].Contains("\"model_id\":\"eleven_flash_v2_5\""), "ElevenLabs generation sends selected model");
+
+var elevenLabsVoicesJson = """
+{
+  "voices": [
+    {
+      "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+      "name": "George",
+      "category": "premade",
+      "labels": {
+        "accent": "British",
+        "gender": "male",
+        "age": "middle_aged",
+        "use_case": "narration"
+      },
+      "preview_url": "https://example.com/george.mp3",
+      "verified_languages": [
+        {
+          "language": "en",
+          "accent": "British",
+          "preview_url": "https://example.com/george-en.mp3"
+        }
+      ]
+    },
+    {
+      "voice_id": "clone-voice",
+      "name": "Clone Voice",
+      "category": "cloned",
+      "labels": {
+        "language": "zh",
+        "gender": "female",
+        "use_case": "conversational"
+      },
+      "preview_url": "https://example.com/clone.mp3",
+      "verified_languages": []
+    }
+  ],
+  "has_more": false
+}
+""";
+var elevenLabsVoices = ElevenLabsTtsProvider.ParseVoicesJson(elevenLabsVoicesJson);
+AssertEqual(2, elevenLabsVoices.Count, "ElevenLabs voice parser returns all voices");
+AssertEqual("JBFqnCBsd6RMkjVDRZzb", elevenLabsVoices[0].Id, "ElevenLabs voice parser maps voice_id to id");
+AssertEqual("George", elevenLabsVoices[0].Name, "ElevenLabs voice parser maps display name");
+AssertEqual("男", elevenLabsVoices[0].Gender, "ElevenLabs voice parser localizes male gender");
+AssertEqual("en", elevenLabsVoices[0].Language, "ElevenLabs voice parser maps verified language");
+AssertEqual("https://example.com/george-en.mp3", elevenLabsVoices[0].SampleUrl, "ElevenLabs voice parser prefers verified language preview");
+AssertTrue(elevenLabsVoices[0].Categories.Contains("premade"), "ElevenLabs voice parser keeps category metadata");
+AssertTrue(elevenLabsVoices[0].Categories.Contains("narration"), "ElevenLabs voice parser keeps use case metadata");
+AssertEqual("女", elevenLabsVoices[1].Gender, "ElevenLabs voice parser localizes female gender");
+AssertEqual("zh", elevenLabsVoices[1].Language, "ElevenLabs voice parser falls back to label language");
+
+var elevenLabsVoiceHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new StringContent(elevenLabsVoicesJson, System.Text.Encoding.UTF8, "application/json")
+    });
+var elevenLabsFetchedVoices = await new ElevenLabsTtsProvider(new HttpClient(elevenLabsVoiceHandler), elevenLabsSettings)
+    .FetchVoicesAsync("eleven-key");
+AssertEqual(2, elevenLabsFetchedVoices.Count, "ElevenLabs fake voice fetch returns parsed voices");
+AssertTrue(
+    elevenLabsVoiceHandler.RequestUris[0]?.AbsoluteUri == "https://api.elevenlabs.io/v2/voices",
+    "ElevenLabs voice fetch uses official v2 voices endpoint");
+AssertEqual("eleven-key", elevenLabsVoiceHandler.RequestHeaderValues[0]["xi-api-key"], "ElevenLabs voice fetch sends xi-api-key header");
+
+Console.WriteLine("ElevenLabs provider request body and voice parser tests passed.");
+
 var googlePlainJson = GoogleTtsProvider.BuildSynthesizeRequestJson(new TtsRequest
 {
     VendorId = "google",
@@ -1129,6 +1262,15 @@ AssertTrue(miniMaxVendor.DefaultModels.Any(model => model.Id == "speech-2.8-turb
 AssertTrue(miniMaxVendor.DefaultVoices.Any(voice => voice.Id == "Chinese (Mandarin)_Reliable_Executive"), "MiniMax vendor exposes a Mandarin default voice");
 AssertTrue(miniMaxVendor.DefaultVoices.Any(voice => voice.Id == "English_expressive_narrator"), "MiniMax vendor exposes an English example voice");
 
+var elevenLabsVendor = VendorRegistry.GetById("elevenlabs") ?? throw new Exception("ElevenLabs vendor config is missing");
+AssertTrue(elevenLabsVendor.SupportsVoiceFetch, "ElevenLabs vendor enables online voice library refresh");
+AssertTrue(elevenLabsVendor.Capabilities.SupportedOutputFormats.Contains("mp3_44100_128"), "ElevenLabs vendor exposes official MP3 output format");
+AssertTrue(elevenLabsVendor.Capabilities.SupportedOutputFormats.Contains("opus_48000_32"), "ElevenLabs vendor exposes official Opus output format");
+AssertTrue(elevenLabsVendor.Capabilities.SupportedOutputFormats.Contains("pcm_16000"), "ElevenLabs vendor exposes official PCM output format");
+AssertTrue(elevenLabsVendor.Capabilities.SupportedOutputFormats.Contains("ulaw_8000"), "ElevenLabs vendor exposes official u-law output format");
+AssertTrue(elevenLabsVendor.DefaultModels.Any(model => model.Id == "eleven_multilingual_v2"), "ElevenLabs vendor exposes multilingual model");
+AssertTrue(elevenLabsVendor.DefaultVoices.Any(voice => voice.Id == "JBFqnCBsd6RMkjVDRZzb"), "ElevenLabs vendor exposes official example voice");
+
 Console.WriteLine("Vendor capabilities registry tests passed.");
 
 var settingsRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Settings.razor");
@@ -1141,6 +1283,7 @@ AssertTrue(settingsMarkup.Contains("关键链接"), "Settings exposes the vendor
 AssertTrue(settingsMarkup.Contains("vendor.ImportantLinks"), "Settings renders links from the shared vendor important link registry");
 AssertTrue(settingsMarkup.Contains("MIMO_API_KEY"), "Settings explains Xiaomi MiMo credential naming");
 AssertTrue(settingsMarkup.Contains("MINIMAX_API_KEY"), "Settings explains MiniMax credential naming");
+AssertTrue(settingsMarkup.Contains("ELEVENLABS_API_KEY"), "Settings explains ElevenLabs credential naming");
 
 var homeRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Home.razor");
 var homeMarkup = await File.ReadAllTextAsync(homeRazorPath);
@@ -1154,6 +1297,7 @@ AssertTrue(homeMarkup.Contains("assets/vendor-icons/azure.ico"), "Home page uses
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/google.ico"), "Home page uses local Google Cloud brand icon");
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/openai.svg"), "Home page uses local OpenAI brand icon");
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/minimax.ico"), "Home page uses local MiniMax brand icon");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/elevenlabs.svg"), "Home page uses local ElevenLabs brand icon");
 
 var vendorIconRoot = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "assets", "vendor-icons");
 foreach (var iconFile in new[]
@@ -1166,7 +1310,8 @@ foreach (var iconFile in new[]
     "azure.ico",
     "google.ico",
     "openai.svg",
-    "minimax.ico"
+    "minimax.ico",
+    "elevenlabs.svg"
 })
 {
     var iconPath = Path.Combine(vendorIconRoot, iconFile);
@@ -1252,6 +1397,7 @@ internal sealed class RecordingQueueHandler : HttpMessageHandler
     public List<Uri?> RequestUris { get; } = new();
     public List<string> RequestBodies { get; } = new();
     public List<string> RequestAuthorizationHeaders { get; } = new();
+    public List<Dictionary<string, string>> RequestHeaderValues { get; } = new();
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -1260,6 +1406,10 @@ internal sealed class RecordingQueueHandler : HttpMessageHandler
         RequestAuthorizationHeaders.Add(request.Headers.Authorization is null
             ? ""
             : $"{request.Headers.Authorization.Scheme} {request.Headers.Authorization.Parameter}");
+        RequestHeaderValues.Add(request.Headers.ToDictionary(
+            header => header.Key,
+            header => string.Join(",", header.Value),
+            StringComparer.OrdinalIgnoreCase));
 
         if (_responses.Count == 0)
             throw new InvalidOperationException("No fake HTTP response queued.");

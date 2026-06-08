@@ -21,6 +21,7 @@ public class TtsService
     private readonly BaiduTtsProvider _baiduProvider;
     private readonly XiaomiMimoTtsProvider _xiaomiMimoProvider;
     private readonly MiniMaxTtsProvider _miniMaxProvider;
+    private readonly ElevenLabsTtsProvider _elevenLabsProvider;
 
     public TtsService(SettingsService settingsService)
     {
@@ -35,6 +36,7 @@ public class TtsService
         _baiduProvider = new BaiduTtsProvider(_httpClient, _settingsService);
         _xiaomiMimoProvider = new XiaomiMimoTtsProvider(_httpClient, _settingsService);
         _miniMaxProvider = new MiniMaxTtsProvider(_httpClient, _settingsService);
+        _elevenLabsProvider = new ElevenLabsTtsProvider(_httpClient, _settingsService);
     }
 
     /// <summary>
@@ -59,6 +61,7 @@ public class TtsService
                 "google" => await _googleProvider.TestConnectivityAsync(apiKey),
                 "xiaomi_mimo" => await _xiaomiMimoProvider.TestConnectivityAsync(apiKey),
                 "minimax" => await _miniMaxProvider.TestConnectivityAsync(apiKey),
+                "elevenlabs" => await _elevenLabsProvider.TestConnectivityAsync(apiKey),
                 _ => (false, "该厂商暂不支持连通性测试。")
             };
         }
@@ -81,6 +84,7 @@ public class TtsService
             if (vendorId == "google") return await _googleProvider.FetchVoicesAsync(apiKey);
             if (vendorId == "azure") return await _azureProvider.FetchVoicesAsync(apiKey);
             if (vendorId == "minimax") return await _miniMaxProvider.FetchVoicesAsync(apiKey);
+            if (vendorId == "elevenlabs") return await _elevenLabsProvider.FetchVoicesAsync(apiKey);
             return new List<VoiceOption>();
         }
         catch
@@ -115,6 +119,7 @@ public class TtsService
                 "google" => await _googleProvider.GenerateAsync(request, apiKey),
                 "xiaomi_mimo" => await _xiaomiMimoProvider.GenerateAsync(request, apiKey),
                 "minimax" => await _miniMaxProvider.GenerateAsync(request, apiKey),
+                "elevenlabs" => await _elevenLabsProvider.GenerateAsync(request, apiKey),
                 _ => new TtsResult { Success = false, ErrorMessage = $"该厂商 ({vendor.Name}) 暂未实现联调接口。" }
             };
         }

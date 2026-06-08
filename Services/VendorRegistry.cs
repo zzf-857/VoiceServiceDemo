@@ -261,6 +261,56 @@ public static class VendorRegistry
         // ===================== 海外厂商 =====================
         new VendorConfig
         {
+            Id = "elevenlabs",
+            Name = "ElevenLabs",
+            Description = "ElevenLabs 高自然度多语言语音合成服务，支持在线音色库和多种音频输出格式。",
+            IconName = "sparkles",
+            ApiBaseUrl = "https://api.elevenlabs.io/v1/text-to-speech",
+            DocumentationUrl = "https://elevenlabs.io/docs/api-reference/text-to-speech/convert",
+            ImportantLinks = new()
+            {
+                new VendorLink
+                {
+                    Label = "API Key 管理",
+                    Url = "https://elevenlabs.io/app/settings/api-keys",
+                    Description = "创建或管理 ELEVENLABS_API_KEY"
+                },
+                new VendorLink
+                {
+                    Label = "音色列表 API",
+                    Url = "https://elevenlabs.io/docs/api-reference/voices/search",
+                    Description = "查看 /v2/voices 在线音色库接口"
+                },
+                new VendorLink
+                {
+                    Label = "模型列表 API",
+                    Url = "https://elevenlabs.io/docs/api-reference/models/list",
+                    Description = "查看 /v1/models 可用模型接口"
+                }
+            },
+            Capabilities = new VendorCapabilities
+            {
+                SupportedOutputFormats = new() { "mp3_44100_128", "opus_48000_32", "pcm_16000", "ulaw_8000" }
+            },
+            SpeedDef = new TtsParameterDef { Min = 0.7, Max = 2.0, Default = 1.0, Step = 0.05 },
+            VolumeDef = new TtsParameterDef { IsSupported = false },
+            SupportsModelFetch = false,
+            SupportsVoiceFetch = true,
+            DefaultModels = new()
+            {
+                new VoiceModel { Id = "eleven_multilingual_v2", Name = "Eleven Multilingual v2" },
+                new VoiceModel { Id = "eleven_flash_v2_5", Name = "Eleven Flash v2.5" },
+                new VoiceModel { Id = "eleven_turbo_v2_5", Name = "Eleven Turbo v2.5" }
+            },
+            DefaultVoices = new()
+            {
+                new VoiceOption { Id = "JBFqnCBsd6RMkjVDRZzb", Name = "George", Gender = "男", Language = "英文", Categories = new List<string> { "官方示例", "叙事" } },
+                new VoiceOption { Id = "21m00Tcm4TlvDq8ikWAM", Name = "Rachel", Gender = "女", Language = "英文", Categories = new List<string> { "官方示例", "通用" } },
+                new VoiceOption { Id = "AZnzlk1XvdvUeBnXmlld", Name = "Domi", Gender = "女", Language = "英文", Categories = new List<string> { "官方示例", "活力" } }
+            }
+        },
+        new VendorConfig
+        {
             Id = "azure",
             Name = "Microsoft Azure",
             Description = "全球领先的多语言、多角色神经元语音合成服务。",
