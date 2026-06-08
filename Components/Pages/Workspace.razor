@@ -269,7 +269,7 @@
                         {
                             <div class="emotion-row">
                                 <span>风格</span>
-                                @foreach (var style in AzureStyles)
+                                @foreach (var style in AzureStyleOptions)
                                 {
                                     <button class="@($"filter-chip {(_selectedStyle == style.Id ? "active" : "")}")"
                                             @onclick="@(() => _selectedStyle = style.Id)">
@@ -541,19 +541,12 @@
         var emotionOptions = GetHuoshanEmotionOptions(v).ToList();
         _selectedEmotion = emotionOptions.Any(e => e.Id == "neutral") ? "neutral"
                          : emotionOptions.FirstOrDefault()?.Id ?? "";
+
+        if (IsAzure && !AzureStyleOptions.Any(style => style.Id == _selectedStyle))
+            _selectedStyle = "";
     }
 
-    private static readonly List<TtsExpressionOption> AzureStyles = new()
-    {
-        new TtsExpressionOption { Id = "", Name = "默认" },
-        new TtsExpressionOption { Id = "cheerful", Name = "愉快" },
-        new TtsExpressionOption { Id = "sad", Name = "悲伤" },
-        new TtsExpressionOption { Id = "angry", Name = "生气" },
-        new TtsExpressionOption { Id = "chat", Name = "聊天" },
-        new TtsExpressionOption { Id = "customerservice", Name = "客服" },
-        new TtsExpressionOption { Id = "newscast", Name = "新闻" }
-    };
-
+    private IReadOnlyList<TtsExpressionOption> AzureStyleOptions => AzureStylePolicy.GetOptions(_selectedVoice);
     private bool IsAzure => _vendor?.Id == "azure";
     private bool IsHuoshan => _vendor?.Id == "huoshan";
     private VendorCapabilities VendorCapabilities => _vendor?.Capabilities ?? new();

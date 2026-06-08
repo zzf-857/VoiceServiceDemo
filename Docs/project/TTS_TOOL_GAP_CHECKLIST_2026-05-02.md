@@ -40,6 +40,11 @@
   - 已完成：Azure 在线音色会规范化为 `VoiceOption`，映射 `ShortName`、`LocalName/DisplayName`、`Gender`、`Locale`、`VoiceType` 和 `StyleList`。
   - 已验证：新增自检覆盖 Azure voices/list JSON 解析；自检和解决方案顺序构建通过。
   - 关联缺口：完成 P2-13，并继续推进 P2-11；Azure style 按音色动态过滤仍归 P1-09。
+- [x] **按 Azure 音色动态过滤 speaking style**
+  - 已完成：新增 `AzureStylePolicy`，从 Azure 在线音色的 `style:*` 元数据生成当前音色可用的 style chips。
+  - 已完成：Workspace 的 Azure style 列表改为按选中音色动态显示；切换音色后会清空不再支持的已选 style。
+  - 已验证：新增自检覆盖 `cheerful` / `sad` 可见、`angry` 被隐藏的动态过滤；自检和解决方案顺序构建通过。
+  - 关联缺口：完成 P1-09 的基础动态过滤；更完整的 style 中文名表和离线内置音色 style 元数据可继续扩展。
 
 ## P0：核心生成链路
 
@@ -125,10 +130,10 @@
   - 建议：提供 SSML 模板、语法轻校验、常用标签插入。
   - 验收：缺失 `<speak>`、voice 不匹配、XML 不闭合可在生成前提示。
 
-- [ ] **P1-09 Azure speaking style 不是按音色动态过滤**
-  - 现状：风格列表是固定预设。
-  - 影响：某些 Azure voice 不支持某些 style，生成会失败或无效果。
-  - 建议：音色元数据记录 style support，或按 locale/voice family 配表。
+- [x] **P1-09 Azure speaking style 不是按音色动态过滤**
+  - 现状：Azure 在线音色刷新会把 `StyleList` 保存为 `style:*` 元数据；Workspace 根据当前音色动态显示 style chips。
+  - 已修正：当当前音色声明 style 支持时，用户只看到该音色可用的 style；没有 style 元数据的内置/缓存音色保留常用 fallback。
+  - 后续影响：更完整的 Azure style 中文名表、内置音色 style 配表和 style 说明仍可继续增强。
   - 验收：用户只看到当前音色可用的 style。
 
 - [ ] **P1-10 火山 emotion 能力仍未完整产品化**

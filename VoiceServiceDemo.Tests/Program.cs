@@ -298,6 +298,10 @@ AssertEqual("女", azureVoices[0].Gender, "Azure voice parser localizes female g
 AssertEqual("zh-CN", azureVoices[0].Language, "Azure voice parser maps locale to language");
 AssertTrue(azureVoices[0].Categories.Contains("Neural"), "Azure voice parser includes voice type category");
 AssertTrue(azureVoices[0].Categories.Contains("style:cheerful"), "Azure voice parser preserves style metadata as categories");
+var azureStyleOptions = AzureStylePolicy.GetOptions(azureVoices[0]).ToList();
+AssertTrue(azureStyleOptions.Any(style => style.Id == "cheerful" && style.Name == "愉快"), "Azure style policy exposes voice-supported cheerful style");
+AssertTrue(azureStyleOptions.Any(style => style.Id == "sad" && style.Name == "悲伤"), "Azure style policy exposes voice-supported sad style");
+AssertFalse(azureStyleOptions.Any(style => style.Id == "angry"), "Azure style policy hides unsupported styles for selected voice");
 
 Console.WriteLine("Azure voice parser tests passed.");
 
