@@ -12,6 +12,7 @@ public class VendorConfig
     public string ApiBaseUrl { get; set; } = "";
     public string DocumentationUrl { get; set; } = "";
     public List<VendorLink> ImportantLinks { get; set; } = new();
+    public VendorCapabilities Capabilities { get; set; } = new();
     public List<VoiceModel> DefaultModels { get; set; } = new();
     public List<VoiceOption> DefaultVoices { get; set; } = new();
     public bool SupportsModelFetch { get; set; } = false;
@@ -36,6 +37,26 @@ public class VendorLink
     public string Label { get; set; } = "";
     public string Url { get; set; } = "";
     public string Description { get; set; } = "";
+}
+
+/// <summary>
+/// 厂商在客户端已经暴露的生成能力。
+/// </summary>
+public class VendorCapabilities
+{
+    public bool SupportsSsml { get; set; }
+    public bool SupportsStyle { get; set; }
+    public bool SupportsStyleDegree { get; set; }
+    public bool SupportsEmotion { get; set; }
+    public bool SupportsInstructions { get; set; }
+    public List<TtsInputFormat> SupportedInputFormats { get; set; } = new() { TtsInputFormat.PlainText };
+
+    public bool HasExpressionControls =>
+        SupportsSsml ||
+        SupportsStyle ||
+        SupportsStyleDegree ||
+        SupportsEmotion ||
+        SupportsInstructions;
 }
 
 /// <summary>

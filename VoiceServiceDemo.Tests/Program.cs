@@ -324,6 +324,20 @@ AssertTrue(
 
 Console.WriteLine("Vendor important link registry tests passed.");
 
+var azureVendor = VendorRegistry.GetById("azure") ?? throw new Exception("Azure vendor config is missing");
+AssertTrue(azureVendor.Capabilities.SupportsSsml, "Azure vendor declares SSML support");
+AssertTrue(azureVendor.Capabilities.SupportsStyle, "Azure vendor declares speaking style support");
+AssertTrue(azureVendor.Capabilities.SupportsStyleDegree, "Azure vendor declares style degree support");
+AssertTrue(azureVendor.Capabilities.SupportedInputFormats.Contains(TtsInputFormat.Ssml), "Azure vendor exposes SSML as a supported input format");
+
+AssertTrue(huoshanVendor.Capabilities.SupportsEmotion, "Huoshan vendor declares emotion controls");
+AssertFalse(huoshanVendor.Capabilities.SupportsSsml, "Huoshan vendor does not declare generic SSML support");
+
+var openAiVendor = VendorRegistry.GetById("openai") ?? throw new Exception("OpenAI vendor config is missing");
+AssertFalse(openAiVendor.Capabilities.SupportsInstructions, "OpenAI instructions remain disabled until the provider maps them");
+
+Console.WriteLine("Vendor capabilities registry tests passed.");
+
 var settingsRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Settings.razor");
 var settingsMarkup = await File.ReadAllTextAsync(settingsRazorPath);
 AssertTrue(settingsMarkup.Contains("credential-field-label"), "Settings credential inputs have persistent labels");
@@ -336,6 +350,8 @@ AssertTrue(settingsMarkup.Contains("vendor.ImportantLinks"), "Settings renders l
 var workspaceRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Workspace.razor");
 var workspaceMarkup = await File.ReadAllTextAsync(workspaceRazorPath);
 AssertTrue(workspaceMarkup.Contains("_vendor.ImportantLinks"), "Workspace renders links from the shared vendor important link registry");
+AssertTrue(workspaceMarkup.Contains("VendorCapabilities"), "Workspace reads the shared vendor capabilities");
+AssertFalse(workspaceMarkup.Contains("private bool SupportsExpressionControls => IsAzure || IsHuoshan"), "Workspace expression panel is not gated by a hard-coded vendor pair");
 
 var appCssPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "css", "app.css");
 var appCss = await File.ReadAllTextAsync(appCssPath);

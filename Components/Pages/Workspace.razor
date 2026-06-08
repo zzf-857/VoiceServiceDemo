@@ -249,20 +249,23 @@
                         <small>@ExpressionHint</small>
                     </div>
 
-                    @if (IsAzure)
+                    @if (SupportsSsmlControls || SupportsStyleControls)
                     {
-                        <div class="segmented-control">
-                            <button class="@($"filter-chip {(_inputFormat == TtsInputFormat.PlainText ? "active" : "")}")"
-                                    @onclick="@(() => SetInputFormat(TtsInputFormat.PlainText))">
-                                普通文本
-                            </button>
-                            <button class="@($"filter-chip {(_inputFormat == TtsInputFormat.Ssml ? "active" : "")}")"
-                                    @onclick="@(() => SetInputFormat(TtsInputFormat.Ssml))">
-                                SSML
-                            </button>
-                        </div>
+                        @if (SupportsSsmlControls)
+                        {
+                            <div class="segmented-control">
+                                <button class="@($"filter-chip {(_inputFormat == TtsInputFormat.PlainText ? "active" : "")}")"
+                                        @onclick="@(() => SetInputFormat(TtsInputFormat.PlainText))">
+                                    普通文本
+                                </button>
+                                <button class="@($"filter-chip {(_inputFormat == TtsInputFormat.Ssml ? "active" : "")}")"
+                                        @onclick="@(() => SetInputFormat(TtsInputFormat.Ssml))">
+                                    SSML
+                                </button>
+                            </div>
+                        }
 
-                        @if (_inputFormat == TtsInputFormat.PlainText)
+                        @if (SupportsStyleControls && _inputFormat == TtsInputFormat.PlainText)
                         {
                             <div class="emotion-row">
                                 <span>风格</span>
@@ -275,7 +278,7 @@
                                 }
                             </div>
 
-                            @if (!string.IsNullOrEmpty(_selectedStyle))
+                            @if (SupportsStyleDegreeControls && !string.IsNullOrEmpty(_selectedStyle))
                             {
                                 <div class="slider-group compact-slider">
                                     <div class="slider-header">
@@ -293,7 +296,7 @@
                         }
                     }
 
-                    @if (IsHuoshan && HasHuoshanEmotionControls)
+                    @if (SupportsEmotionControls && HasHuoshanEmotionControls)
                     {
                         <div class="emotion-row">
                             <span>语气</span>
@@ -542,12 +545,19 @@
 
     private bool IsAzure => _vendor?.Id == "azure";
     private bool IsHuoshan => _vendor?.Id == "huoshan";
-    private bool SupportsExpressionControls => IsAzure || IsHuoshan;
-    private string ExpressionHint => IsAzure
+    private VendorCapabilities VendorCapabilities => _vendor?.Capabilities ?? new();
+    private bool SupportsSsmlControls => VendorCapabilities.SupportsSsml;
+    private bool SupportsStyleControls => VendorCapabilities.SupportsStyle;
+    private bool SupportsStyleDegreeControls => VendorCapabilities.SupportsStyleDegree;
+    private bool SupportsEmotionControls => VendorCapabilities.SupportsEmotion;
+    private bool SupportsExpressionControls =>
+        VendorCapabilities.HasExpressionControls &&
+        (SupportsSsmlControls || SupportsStyleControls || HasHuoshanEmotionControls);
+    private string ExpressionHint => SupportsSsmlControls || SupportsStyleControls
         ? "Azure 使用 SSML 或 speaking style 控制语气"
         : "火山使用音色支持的 emotion 参数控制语气";
-    private string InputFieldLabel => IsAzure && _inputFormat == TtsInputFormat.Ssml ? "SSML 文本" : "测试文本";
-    private string CurrentInputText => IsAzure && _inputFormat == TtsInputFormat.Ssml ? _ssmlText : _inputText;
+    private string InputFieldLabel => SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml ? "SSML 文本" : "测试文本";
+    private string CurrentInputText => SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml ? _ssmlText : _inputText;
     private List<TtsExpressionOption> HuoshanEmotionOptions => _selectedVoice == null ? new() : GetHuoshanEmotionOptions(_selectedVoice).ToList();
     private bool HasHuoshanEmotionControls => _selectedVoice != null && HuoshanEmotionPolicy.HasSelectableEmotionControls(_selectedVoice);
 
@@ -920,11 +930,11 @@
             Speed = _speed,
             Volume = _volume,
             InputFormat = _inputFormat,
-            Style = IsAzure ? _selectedStyle : "",
+            Style = SupportsStyleControls ? _selectedStyle : "",
             StyleDegree = _styleDegree,
-            Emotion = IsHuoshan ? HuoshanEmotionPolicy.ToRequestEmotion(_selectedEmotion) : "",
-            ResourceId = IsHuoshan && _selectedVoice != null ? HuoshanEmotionPolicy.GetResourceId(_selectedVoice) : "",
-            SsmlText = IsAzure ? _ssmlText : ""
+            Emotion = SupportsEmotionControls && IsHuoshan ? HuoshanEmotionPolicy.ToRequestEmotion(_selectedEmotion) : "",
+            ResourceId = SupportsEmotionControls && IsHuoshan && _selectedVoice != null ? HuoshanEmotionPolicy.GetResourceId(_selectedVoice) : "",
+            SsmlText = SupportsSsmlControls ? _ssmlText : ""
         };
 
         _result = await TtsService.GenerateAsync(request);

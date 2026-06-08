@@ -39,6 +39,10 @@ public static class VendorRegistry
                     Description = "打开豆包语音体验入口"
                 }
             },
+            Capabilities = new VendorCapabilities
+            {
+                SupportsEmotion = true
+            },
             SpeedDef = new TtsParameterDef { Min = 0.5, Max = 2.0, Default = 1.0, Step = 0.1 },
             VolumeDef = new TtsParameterDef { Min = 0.1, Max = 3.0, Default = 1.0, Step = 0.1 },
             SupportsModelFetch = false,
@@ -145,6 +149,13 @@ public static class VendorRegistry
             IconName = "layout-template",
             ApiBaseUrl = "https://{region}.tts.speech.microsoft.com/cognitiveservices/v1",
             DocumentationUrl = "https://learn.microsoft.com/zh-cn/azure/ai-services/speech-service/rest-text-to-speech",
+            Capabilities = new VendorCapabilities
+            {
+                SupportsSsml = true,
+                SupportsStyle = true,
+                SupportsStyleDegree = true,
+                SupportedInputFormats = new() { TtsInputFormat.PlainText, TtsInputFormat.Ssml }
+            },
             SpeedDef = new TtsParameterDef { Min = 0.1, Max = 3.0, Default = 1.0, Step = 0.1 },
             VolumeDef = new TtsParameterDef { Min = 0.0, Max = 100.0, Default = 100.0, Step = 1 }, // 以百分比映射
             SupportsModelFetch = false,
