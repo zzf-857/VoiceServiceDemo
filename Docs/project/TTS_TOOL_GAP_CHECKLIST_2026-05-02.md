@@ -80,6 +80,11 @@
   - 已完成：`AzureTtsProvider` 将客户端格式映射到 REST 请求头 `X-Microsoft-OutputFormat`，非法值回落到 `audio-16khz-128kbitrate-mono-mp3`，保存文件扩展名随格式变化。
   - 已验证：新增自检覆盖 Azure 输出格式 header 映射、非法格式回落、扩展名映射和能力声明；自检和解决方案顺序构建通过。
   - 关联缺口：继续推进 P1-15；更细的采样率/码率/声道枚举可后续扩展到统一格式元数据。
+- [x] **接入百度输出格式选择**
+  - 已完成：百度注册表声明 `mp3/pcm_16k/pcm_8k/wav` 输出格式，复用 Workspace 的通用“输出格式”选择。
+  - 已完成：`BaiduTtsProvider` 将客户端格式映射到短文本合成 URL 参数 `aue`，非法值回落到 `3`（MP3），保存文件扩展名随格式变化。
+  - 已验证：新增自检覆盖百度默认 aue、PCM 16K aue、非法格式回落、扩展名映射和能力声明；自检和解决方案顺序构建通过。
+  - 关联缺口：继续推进 P1-15；百度音质/采样率更细说明可后续并入统一格式元数据。
 
 ## P0：核心生成链路
 
@@ -205,8 +210,8 @@
 ## P1：音频输出与播放
 
 - [ ] **P1-15 缺少音频格式选择**
-  - 现状：OpenAI 已可在 UI 选择 `mp3/opus/aac/flac/wav/pcm`，并映射到官方 `response_format`；Google 已可选择 `mp3/linear16/ogg_opus/mulaw/alaw` 并映射到 `audioEncoding`；腾讯已可选择 `mp3/wav/pcm` 并映射到 `Codec`；Azure 已可选择常用 MP3/RIFF PCM/RAW PCM/OGG Opus 并映射到 `X-Microsoft-OutputFormat`。
-  - 影响：百度、火山、阿里仍基本固定 MP3；采样率、码率和声道还没有形成统一格式元数据。
+  - 现状：OpenAI 已可在 UI 选择 `mp3/opus/aac/flac/wav/pcm`，并映射到官方 `response_format`；Google 已可选择 `mp3/linear16/ogg_opus/mulaw/alaw` 并映射到 `audioEncoding`；腾讯已可选择 `mp3/wav/pcm` 并映射到 `Codec`；Azure 已可选择常用 MP3/RIFF PCM/RAW PCM/OGG Opus 并映射到 `X-Microsoft-OutputFormat`；百度已可选择 `mp3/pcm_16k/pcm_8k/wav` 并映射到 `aue`。
+  - 影响：火山、阿里仍基本固定 MP3；采样率、码率和声道还没有形成统一格式元数据。
   - 建议：继续把能力模型扩展到采样率、码率和厂商专属格式枚举，UI 按厂商显示。
   - 验收：支持至少 MP3/WAV/PCM 的厂商可在 UI 选择。
 

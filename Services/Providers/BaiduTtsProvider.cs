@@ -49,7 +49,7 @@ public sealed class BaiduTtsProvider
         }
 
         var audioBytes = await response.Content.ReadAsByteArrayAsync();
-        var filePath = GetOutputFilePath();
+        var filePath = GetOutputFilePath(request.OutputFormat);
         await File.WriteAllBytesAsync(filePath, audioBytes);
 
         var vendor = VendorRegistry.GetById("baidu");
@@ -77,7 +77,7 @@ public sealed class BaiduTtsProvider
                "&pit=5" +
                $"&vol={(int)Math.Round(request.Volume)}" +
                $"&per={Uri.EscapeDataString(request.VoiceId)}" +
-               "&aue=3";
+               $"&aue={GetAue(request.OutputFormat)}";
     }
 
     private async Task<string> RequestAccessTokenAsync(string apiKey, string secretKey)
@@ -90,11 +90,34 @@ public sealed class BaiduTtsProvider
         return await tokenResp.Content.ReadAsStringAsync();
     }
 
-    private string GetOutputFilePath()
+    public static string GetOutputFormatExtension(string outputFormat) =>
+        NormalizeOutputFormat(outputFormat) switch
+        {
+            "wav" => ".wav",
+            "pcm_16k" or "pcm_8k" => ".pcm",
+            _ => ".mp3"
+        };
+
+    private static int GetAue(string outputFormat) =>
+        NormalizeOutputFormat(outputFormat) switch
+        {
+            "pcm_16k" => 4,
+            "pcm_8k" => 5,
+            "wav" => 6,
+            _ => 3
+        };
+
+    private static string NormalizeOutputFormat(string outputFormat)
+    {
+        var normalized = (outputFormat ?? "").Trim().ToLowerInvariant();
+        return normalized is "mp3" or "pcm_16k" or "pcm_8k" or "wav" ? normalized : "mp3";
+    }
+
+    private string GetOutputFilePath(string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
         Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"baidu_{DateTime.Now:yyyyMMdd_HHmmss}.mp3");
+        return Path.Combine(dir, $"baidu_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(outputFormat)}");
     }
 
     private static (string ApiKey, string SecretKey)? ParseCredentials(string apiKey)

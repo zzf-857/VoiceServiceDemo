@@ -132,6 +132,10 @@ public static class VendorRegistry
             IconName = "scan-search",
             ApiBaseUrl = "https://tsn.baidu.com/text2audio",
             DocumentationUrl = "https://ai.baidu.com/ai-doc/SPEECH/Jlbxdezuf",
+            Capabilities = new VendorCapabilities
+            {
+                SupportedOutputFormats = new() { "mp3", "pcm_16k", "pcm_8k", "wav" }
+            },
             SpeedDef = new TtsParameterDef { Min = 0, Max = 15, Default = 5, Step = 1 },
             VolumeDef = new TtsParameterDef { Min = 0, Max = 15, Default = 5, Step = 1 },
             SupportsModelFetch = false,

@@ -489,6 +489,28 @@ AssertTrue(baiduUrl.Contains("tok=token-123"), "Baidu synthesis URL includes acc
 AssertTrue(baiduUrl.Contains("spd=6"), "Baidu synthesis URL maps speed");
 AssertTrue(baiduUrl.Contains("vol=9"), "Baidu synthesis URL maps volume");
 AssertTrue(baiduUrl.Contains("per=3"), "Baidu synthesis URL maps voice id");
+AssertTrue(baiduUrl.Contains("aue=3"), "Baidu synthesis URL defaults to MP3 audio format");
+
+var baiduPcmUrl = BaiduTtsProvider.BuildSynthesisUrl(new TtsRequest
+{
+    VendorId = "baidu",
+    VoiceId = "3",
+    Text = "你好 百度",
+    OutputFormat = "pcm_16k"
+}, "token-123");
+AssertTrue(baiduPcmUrl.Contains("aue=4"), "Baidu synthesis URL maps PCM 16K output format");
+
+var baiduInvalidFormatUrl = BaiduTtsProvider.BuildSynthesisUrl(new TtsRequest
+{
+    VendorId = "baidu",
+    VoiceId = "3",
+    Text = "你好 百度",
+    OutputFormat = "unsupported"
+}, "token-123");
+AssertTrue(baiduInvalidFormatUrl.Contains("aue=3"), "Baidu synthesis URL falls back to MP3 for unsupported output format");
+AssertEqual(".wav", BaiduTtsProvider.GetOutputFormatExtension("wav"), "Baidu WAV output uses wav extension");
+AssertEqual(".pcm", BaiduTtsProvider.GetOutputFormatExtension("pcm_8k"), "Baidu PCM output uses pcm extension");
+AssertEqual(".mp3", BaiduTtsProvider.GetOutputFormatExtension("unknown"), "Baidu output extension falls back to mp3");
 
 Console.WriteLine("Baidu provider boundary tests passed.");
 
@@ -683,6 +705,10 @@ var tencentVendor = VendorRegistry.GetById("tencent") ?? throw new Exception("Te
 AssertTrue(tencentVendor.Capabilities.SupportsEmotion, "Tencent vendor declares emotion controls");
 AssertTrue(tencentVendor.Capabilities.SupportedOutputFormats.Contains("wav"), "Tencent vendor exposes WAV output format");
 AssertTrue(tencentVendor.Capabilities.SupportedOutputFormats.Contains("pcm"), "Tencent vendor exposes PCM output format");
+
+var baiduVendor = VendorRegistry.GetById("baidu") ?? throw new Exception("Baidu vendor config is missing");
+AssertTrue(baiduVendor.Capabilities.SupportedOutputFormats.Contains("wav"), "Baidu vendor exposes WAV output format");
+AssertTrue(baiduVendor.Capabilities.SupportedOutputFormats.Contains("pcm_16k"), "Baidu vendor exposes PCM 16K output format");
 
 Console.WriteLine("Vendor capabilities registry tests passed.");
 
