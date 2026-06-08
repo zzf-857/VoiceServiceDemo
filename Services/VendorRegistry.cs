@@ -209,6 +209,10 @@ public static class VendorRegistry
             IconName = "bot",
             ApiBaseUrl = "https://api.openai.com/v1/audio/speech",
             DocumentationUrl = "https://platform.openai.com/docs/guides/text-to-speech",
+            Capabilities = new VendorCapabilities
+            {
+                SupportsInstructions = true
+            },
             SpeedDef = new TtsParameterDef { Min = 0.25, Max = 4.0, Default = 1.0, Step = 0.05 },
             VolumeDef = new TtsParameterDef { IsSupported = false },
             SupportsModelFetch = false,

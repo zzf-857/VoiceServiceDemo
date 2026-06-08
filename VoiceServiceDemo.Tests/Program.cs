@@ -305,6 +305,41 @@ AssertTrue(invalidTencent.Message.Contains("SecretId|SecretKey"), "Tencent provi
 
 Console.WriteLine("Tencent provider boundary tests passed.");
 
+var openAiInstructionJson = OpenAiTtsProvider.BuildSpeechRequestJson(new TtsRequest
+{
+    VendorId = "openai",
+    ModelId = "gpt-4o-mini-tts",
+    VoiceId = "nova",
+    Text = "欢迎使用 VoiceOps。",
+    Speed = 1.0,
+    Instructions = "用温柔但专业的语气朗读。"
+});
+using (var openAiInstructionDoc = JsonDocument.Parse(openAiInstructionJson))
+{
+    AssertTrue(
+        TryGetNested(openAiInstructionDoc.RootElement, out var instructions, "instructions"),
+        "OpenAI supported TTS model request includes instructions");
+    AssertEqual("用温柔但专业的语气朗读。", instructions.GetString(), "OpenAI request preserves reading instructions");
+}
+
+var openAiLegacyJson = OpenAiTtsProvider.BuildSpeechRequestJson(new TtsRequest
+{
+    VendorId = "openai",
+    ModelId = "tts-1",
+    VoiceId = "nova",
+    Text = "欢迎使用 VoiceOps。",
+    Speed = 1.0,
+    Instructions = "用温柔但专业的语气朗读。"
+});
+using (var openAiLegacyDoc = JsonDocument.Parse(openAiLegacyJson))
+{
+    AssertFalse(
+        TryGetNested(openAiLegacyDoc.RootElement, out _, "instructions"),
+        "OpenAI legacy TTS request omits unsupported instructions");
+}
+
+Console.WriteLine("OpenAI provider request body tests passed.");
+
 var googlePlainJson = GoogleTtsProvider.BuildSynthesizeRequestJson(new TtsRequest
 {
     VendorId = "google",
@@ -381,7 +416,7 @@ AssertTrue(googleVendor.Capabilities.SupportsSsml, "Google vendor declares SSML 
 AssertTrue(googleVendor.Capabilities.SupportedInputFormats.Contains(TtsInputFormat.Ssml), "Google vendor exposes SSML as a supported input format");
 
 var openAiVendor = VendorRegistry.GetById("openai") ?? throw new Exception("OpenAI vendor config is missing");
-AssertFalse(openAiVendor.Capabilities.SupportsInstructions, "OpenAI instructions remain disabled until the provider maps them");
+AssertTrue(openAiVendor.Capabilities.SupportsInstructions, "OpenAI vendor declares reading instructions support");
 
 Console.WriteLine("Vendor capabilities registry tests passed.");
 
@@ -400,6 +435,7 @@ AssertTrue(workspaceMarkup.Contains("_vendor.ImportantLinks"), "Workspace render
 AssertTrue(workspaceMarkup.Contains("VendorCapabilities"), "Workspace reads the shared vendor capabilities");
 AssertFalse(workspaceMarkup.Contains("private bool SupportsExpressionControls => IsAzure || IsHuoshan"), "Workspace expression panel is not gated by a hard-coded vendor pair");
 AssertTrue(workspaceMarkup.Contains("Google 使用标准 SSML"), "Workspace gives Google-specific SSML guidance");
+AssertTrue(workspaceMarkup.Contains("OpenAI 使用朗读指导"), "Workspace gives OpenAI-specific instruction guidance");
 
 var appCssPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "css", "app.css");
 var appCss = await File.ReadAllTextAsync(appCssPath);

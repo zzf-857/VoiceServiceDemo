@@ -309,6 +309,16 @@
                             }
                         </div>
                     }
+
+                    @if (SupportsInstructionsControls)
+                    {
+                        <div class="form-group expression-instructions">
+                            <label class="field-caption">朗读指导</label>
+                            <textarea class="text-area generation-text"
+                                      placeholder="例如：用温柔但专业的语气朗读。"
+                                      @bind="_instructions"></textarea>
+                        </div>
+                    }
                 </div>
             }
 
@@ -489,6 +499,7 @@
     private string _selectedVoiceName = "";
     private string _selectedEmotion = "general";
     private string _selectedStyle = "";
+    private string _instructions = "";
     private TtsInputFormat _inputFormat = TtsInputFormat.PlainText;
     private double _styleDegree = 1.0;
     private string _ssmlText = "";
@@ -550,14 +561,18 @@
     private bool SupportsStyleControls => VendorCapabilities.SupportsStyle;
     private bool SupportsStyleDegreeControls => VendorCapabilities.SupportsStyleDegree;
     private bool SupportsEmotionControls => VendorCapabilities.SupportsEmotion;
+    private bool SupportsInstructionsControls =>
+        VendorCapabilities.SupportsInstructions &&
+        _selectedModelId.StartsWith("gpt-4o", StringComparison.OrdinalIgnoreCase);
     private bool SupportsExpressionControls =>
         VendorCapabilities.HasExpressionControls &&
-        (SupportsSsmlControls || SupportsStyleControls || HasHuoshanEmotionControls);
+        (SupportsSsmlControls || SupportsStyleControls || HasHuoshanEmotionControls || SupportsInstructionsControls);
     private string ExpressionHint => _vendor?.Id switch
     {
         "azure" => "Azure 使用 SSML 或 speaking style 控制语气",
         "google" => "Google 使用标准 SSML 控制停顿、读法和强调",
         "huoshan" => "火山使用音色支持的 emotion 参数控制语气",
+        "openai" => "OpenAI 使用朗读指导控制语气和表达",
         _ => "该厂商支持额外表达控制"
     };
     private string InputFieldLabel => SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml ? "SSML 文本" : "测试文本";
@@ -940,6 +955,7 @@
             StyleDegree = _styleDegree,
             Emotion = SupportsEmotionControls && IsHuoshan ? HuoshanEmotionPolicy.ToRequestEmotion(_selectedEmotion) : "",
             ResourceId = SupportsEmotionControls && IsHuoshan && _selectedVoice != null ? HuoshanEmotionPolicy.GetResourceId(_selectedVoice) : "",
+            Instructions = SupportsInstructionsControls ? _instructions : "",
             SsmlText = SupportsSsmlControls ? _ssmlText : ""
         };
 

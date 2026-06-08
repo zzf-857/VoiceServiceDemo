@@ -25,6 +25,11 @@
   - 已完成：新增 `GoogleTtsProvider`，普通文本请求发送 `input.text`，SSML 模式发送 `input.ssml`，并接回桌面端 `TtsService` 分发。
   - 已验证：新增自检覆盖 Google plain text / SSML 请求体二选一，以及 Google SSML 能力声明；解决方案构建通过。
   - 关联缺口：完成 P1-13 的基础生成接入，并推进 P2-11 的供应商拆分；Google 在线音色刷新仍归 P2-14。
+- [x] **接入 OpenAI 朗读指导交互**
+  - 已完成：OpenAI 注册表声明 instructions 能力；Workspace 在支持 instructions 的 `gpt-4o*` TTS 模型下显示“朗读指导”输入框。
+  - 已完成：新增 `OpenAiTtsProvider`，支持模型会发送 `instructions`，旧 `tts-1` / `tts-1-hd` 请求会自动省略该字段。
+  - 已验证：新增自检覆盖 OpenAI instructions 请求体、旧模型省略逻辑、OpenAI 能力声明和 Workspace 提示；解决方案构建通过。
+  - 关联缺口：完成 P1-14 的基础接入，并推进 P2-11 的供应商拆分；OpenAI 模型/音色外部配置仍归 P2-15。
 
 ## P0：核心生成链路
 
@@ -141,10 +146,10 @@
   - 后续影响：Google SSML 语法校验、标签模板和更细的兼容性提示可继续并入 P0-02/P1-08 的校验与模板体系。
   - 验收：Google 可在 SSML 模式下生成 `<speak>` 输入。
 
-- [ ] **P1-14 OpenAI 指令式语气未接入**
-  - 现状：OpenAI 只发送 `input`、`voice`、`speed`。
-  - 影响：无法用自然语言控制语气、角色、情绪。
-  - 建议：如果所选模型支持 instructions，增加“朗读指导”字段。
+- [x] **P1-14 OpenAI 指令式语气未接入**
+  - 现状：OpenAI 在支持 instructions 的 `gpt-4o*` TTS 模型下显示“朗读指导”字段，并把用户输入映射到请求体 `instructions`。
+  - 已修正：旧 `tts-1` / `tts-1-hd` 模型不会发送不支持的 instructions 字段，避免用户误以为所有 OpenAI TTS 模型都支持该能力。
+  - 后续影响：更多模型更新、音色配置外置和模型级能力差异仍归 P2-15 继续处理。
   - 验收：OpenAI 生成可带“用温柔但专业的语气朗读”等指令。
 
 ## P1：音频输出与播放

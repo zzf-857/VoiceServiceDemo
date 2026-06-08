@@ -19,6 +19,7 @@ public class TtsService
     private readonly HuoshanTtsProvider _huoshanProvider;
     private readonly TencentTtsProvider _tencentProvider;
     private readonly GoogleTtsProvider _googleProvider;
+    private readonly OpenAiTtsProvider _openAiProvider;
 
     public TtsService(SettingsService settingsService)
     {
@@ -28,6 +29,7 @@ public class TtsService
         _huoshanProvider = new HuoshanTtsProvider(_httpClient, _settingsService);
         _tencentProvider = new TencentTtsProvider(_httpClient, _settingsService);
         _googleProvider = new GoogleTtsProvider(_httpClient, _settingsService);
+        _openAiProvider = new OpenAiTtsProvider(_httpClient, _settingsService);
     }
 
     /// <summary>
@@ -43,7 +45,7 @@ public class TtsService
         {
             return vendorId switch
             {
-                "openai" => await TestOpenAiAsync(apiKey),
+                "openai" => await _openAiProvider.TestConnectivityAsync(apiKey),
                 "aliyun" => await _aliyunProvider.TestConnectivityAsync(apiKey),
                 "huoshan" => await _huoshanProvider.TestConnectivityAsync(apiKey),
                 "tencent" => await _tencentProvider.TestConnectivityAsync(apiKey),
@@ -78,16 +80,6 @@ public class TtsService
     }
 
     // ===== 连通性测试方法 =====
-
-    private async Task<(bool, string)> TestOpenAiAsync(string apiKey)
-    {
-        var req = new HttpRequestMessage(HttpMethod.Get, "https://api.openai.com/v1/models");
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        var resp = await _httpClient.SendAsync(req);
-        return resp.IsSuccessStatusCode
-            ? (true, "OpenAI 连接成功 ✓")
-            : (false, $"鉴权失败 ({resp.StatusCode})");
-    }
 
     private async Task<(bool, string)> TestBaiduAsync(string apiKey)
     {
@@ -135,7 +127,7 @@ public class TtsService
         {
             return request.VendorId switch
             {
-                "openai" => await GenerateOpenAiAsync(request, apiKey),
+                "openai" => await _openAiProvider.GenerateAsync(request, apiKey),
                 "aliyun" => await _aliyunProvider.GenerateAsync(request, apiKey),
                 "huoshan" => await _huoshanProvider.GenerateAsync(request, apiKey),
                 "tencent" => await _tencentProvider.GenerateAsync(request, apiKey),
@@ -149,32 +141,6 @@ public class TtsService
         {
             return new TtsResult { Success = false, ErrorMessage = $"请求失败: {ex.Message}" };
         }
-    }
-
-    // ========== OpenAI ==========
-    private async Task<TtsResult> GenerateOpenAiAsync(TtsRequest request, string apiKey)
-    {
-        var body = new
-        {
-            model = request.ModelId,
-            input = request.Text,
-            voice = request.VoiceId,
-            speed = request.Speed,
-            response_format = "mp3"
-        };
-
-        var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/audio/speech");
-        httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        httpRequest.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-
-        var response = await _httpClient.SendAsync(httpRequest);
-        if (!response.IsSuccessStatusCode)
-        {
-            var err = await response.Content.ReadAsStringAsync();
-            return new TtsResult { Success = false, ErrorMessage = $"OpenAI API 错误 ({response.StatusCode}): {err}" };
-        }
-
-        return await SaveAudioResponse(response, request, "openai");
     }
 
     // ========== 百度 ==========

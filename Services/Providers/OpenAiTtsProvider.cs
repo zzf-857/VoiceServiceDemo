@@ -1,0 +1,86 @@
+using System.IO;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using VoiceServiceDemo.Models;
+
+namespace VoiceServiceDemo.Services.Providers;
+
+public sealed class OpenAiTtsProvider
+{
+    private readonly HttpClient _httpClient;
+    private readonly SettingsService _settingsService;
+
+    public OpenAiTtsProvider(HttpClient httpClient, SettingsService settingsService)
+    {
+        _httpClient = httpClient;
+        _settingsService = settingsService;
+    }
+
+    public async Task<(bool Success, string Message)> TestConnectivityAsync(string apiKey)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, "https://api.openai.com/v1/models");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        var resp = await _httpClient.SendAsync(req);
+        return resp.IsSuccessStatusCode
+            ? (true, "OpenAI 连接成功 ✓")
+            : (false, $"鉴权失败 ({resp.StatusCode})");
+    }
+
+    public async Task<TtsResult> GenerateAsync(TtsRequest request, string apiKey)
+    {
+        var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/audio/speech");
+        httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        httpRequest.Content = new StringContent(BuildSpeechRequestJson(request), Encoding.UTF8, "application/json");
+
+        var response = await _httpClient.SendAsync(httpRequest);
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync();
+            return new TtsResult { Success = false, ErrorMessage = $"OpenAI API 错误 ({response.StatusCode}): {err}" };
+        }
+
+        var audioBytes = await response.Content.ReadAsByteArrayAsync();
+        var filePath = GetOutputFilePath();
+        await File.WriteAllBytesAsync(filePath, audioBytes);
+
+        var vendor = VendorRegistry.GetById("openai");
+        return new TtsResult
+        {
+            Success = true,
+            FilePath = filePath,
+            VendorName = vendor?.Name ?? "",
+            ModelName = request.ModelId,
+            VoiceName = request.VoiceId,
+            Text = request.Text
+        };
+    }
+
+    public static string BuildSpeechRequestJson(TtsRequest request)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["model"] = request.ModelId,
+            ["input"] = request.Text,
+            ["voice"] = request.VoiceId,
+            ["speed"] = request.Speed,
+            ["response_format"] = "mp3"
+        };
+
+        if (SupportsInstructions(request.ModelId) && !string.IsNullOrWhiteSpace(request.Instructions))
+            body["instructions"] = request.Instructions.Trim();
+
+        return JsonSerializer.Serialize(body);
+    }
+
+    public static bool SupportsInstructions(string modelId) =>
+        modelId.StartsWith("gpt-4o", StringComparison.OrdinalIgnoreCase);
+
+    private string GetOutputFilePath()
+    {
+        var dir = _settingsService.Settings.OutputDirectory;
+        Directory.CreateDirectory(dir);
+        return Path.Combine(dir, $"openai_{DateTime.Now:yyyyMMdd_HHmmss}.mp3");
+    }
+}
