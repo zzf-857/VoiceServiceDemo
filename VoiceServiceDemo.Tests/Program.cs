@@ -383,6 +383,32 @@ using (var googleSsmlDoc = JsonDocument.Parse(googleSsmlJson))
 
 Console.WriteLine("Google provider request body tests passed.");
 
+var googleVoices = GoogleTtsProvider.ParseVoicesJson("""
+{
+  "voices": [
+    {
+      "languageCodes": ["en-US"],
+      "name": "en-US-Wavenet-D",
+      "ssmlGender": "MALE",
+      "naturalSampleRateHertz": 24000
+    },
+    {
+      "languageCodes": ["cmn-CN"],
+      "name": "cmn-CN-Wavenet-A",
+      "ssmlGender": "FEMALE",
+      "naturalSampleRateHertz": 24000
+    }
+  ]
+}
+""");
+AssertEqual(2, googleVoices.Count, "Google voice parser returns all voices");
+AssertEqual("en-US-Wavenet-D", googleVoices[0].Id, "Google voice parser maps name to id");
+AssertEqual("en-US-Wavenet-D (en-US)", googleVoices[0].Name, "Google voice parser includes locale in display name");
+AssertEqual("男", googleVoices[0].Gender, "Google voice parser localizes male gender");
+AssertEqual("en-US", googleVoices[0].Language, "Google voice parser maps language code");
+
+Console.WriteLine("Google voice parser tests passed.");
+
 var huoshanVendor = VendorRegistry.GetById("huoshan") ?? throw new Exception("Huoshan vendor config is missing");
 AssertTrue(
     huoshanVendor.ImportantLinks.Any(link =>

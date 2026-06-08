@@ -60,6 +60,53 @@ public sealed class GoogleTtsProvider
         return new TtsResult { Success = false, ErrorMessage = "Google 返回结果无效: " + respJson };
     }
 
+    public async Task<List<VoiceOption>> FetchVoicesAsync(string apiKey)
+    {
+        var url = $"https://texttospeech.googleapis.com/v1/voices?key={apiKey}";
+        var response = await _httpClient.GetAsync(url);
+        if (!response.IsSuccessStatusCode)
+            return new List<VoiceOption>();
+
+        var json = await response.Content.ReadAsStringAsync();
+        return ParseVoicesJson(json);
+    }
+
+    public static List<VoiceOption> ParseVoicesJson(string json)
+    {
+        var voices = new List<VoiceOption>();
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("voices", out var voiceArray) || voiceArray.ValueKind != JsonValueKind.Array)
+            return voices;
+
+        foreach (var voice in voiceArray.EnumerateArray())
+        {
+            var name = TryGetString(voice, "name") ?? "";
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+
+            var language = "";
+            if (voice.TryGetProperty("languageCodes", out var languageCodes) && languageCodes.ValueKind == JsonValueKind.Array)
+            {
+                language = string.Join(" / ", languageCodes
+                    .EnumerateArray()
+                    .Where(item => item.ValueKind == JsonValueKind.String)
+                    .Select(item => item.GetString())
+                    .Where(value => !string.IsNullOrWhiteSpace(value)));
+            }
+
+            voices.Add(new VoiceOption
+            {
+                Id = name,
+                Name = string.IsNullOrWhiteSpace(language) ? name : $"{name} ({language})",
+                Gender = LocalizeGender(TryGetString(voice, "ssmlGender")),
+                Language = language,
+                Categories = new List<string> { "Google Voice" }
+            });
+        }
+
+        return voices;
+    }
+
     public static string BuildSynthesizeRequestJson(TtsRequest request)
     {
         var input = request.InputFormat == TtsInputFormat.Ssml
@@ -100,4 +147,18 @@ public sealed class GoogleTtsProvider
         var parts = voiceId.Split('-', StringSplitOptions.RemoveEmptyEntries);
         return parts.Length >= 2 ? $"{parts[0]}-{parts[1]}" : voiceId;
     }
+
+    private static string? TryGetString(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static string LocalizeGender(string? gender) =>
+        gender?.ToUpperInvariant() switch
+        {
+            "MALE" => "男",
+            "FEMALE" => "女",
+            "NEUTRAL" => "中性",
+            _ => gender ?? ""
+        };
 }

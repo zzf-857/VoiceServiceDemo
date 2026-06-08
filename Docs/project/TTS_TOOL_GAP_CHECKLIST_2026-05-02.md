@@ -30,6 +30,11 @@
   - 已完成：新增 `OpenAiTtsProvider`，支持模型会发送 `instructions`，旧 `tts-1` / `tts-1-hd` 请求会自动省略该字段。
   - 已验证：新增自检覆盖 OpenAI instructions 请求体、旧模型省略逻辑、OpenAI 能力声明和 Workspace 提示；解决方案构建通过。
   - 关联缺口：完成 P1-14 的基础接入，并推进 P2-11 的供应商拆分；OpenAI 模型/音色外部配置仍归 P2-15。
+- [x] **接入 Google 在线音色刷新**
+  - 已完成：`GoogleTtsProvider` 增加 voices/list 解析和在线拉取，桌面端 `TtsService.FetchVoicesAsync("google")` 已接入 provider。
+  - 已完成：Google 在线音色会规范化为 `VoiceOption`，映射 `name`、`languageCodes` 和 `ssmlGender`。
+  - 已验证：新增自检覆盖 Google voices JSON 解析；自检和解决方案顺序构建通过。
+  - 关联缺口：完成 P2-14 的基础在线音色刷新；更细的语言筛选和缓存版本策略仍归 P1-03/P1-05。
 
 ## P0：核心生成链路
 
@@ -268,10 +273,10 @@
   - 建议：实现 Azure voices/list 接口，按 region 和 locale 缓存。
   - 验收：Azure 可刷新完整音色库。
 
-- [ ] **P2-14 Google 音色在线拉取未实现**
-  - 现状：`SupportsVoiceFetch = true`，但桌面端未实现 Google voice fetch。
-  - 影响：只能使用内置少量音色。
-  - 建议：实现 Google voices 接口并规范化 languageCode/name/ssmlGender。
+- [x] **P2-14 Google 音色在线拉取未实现**
+  - 现状：桌面端已实现 Google voices/list 拉取，并把 `languageCodes`、`name`、`ssmlGender` 规范化到 `VoiceOption`。
+  - 已修正：`TtsService.FetchVoicesAsync("google")` 已接入 `GoogleTtsProvider.FetchVoicesAsync`，工作区刷新音色会走在线接口。
+  - 后续影响：缓存 schema、过期策略、语言/性别多选筛选继续归 P1-03/P1-05 处理。
   - 验收：Google 可按语言刷新音色。
 
 - [ ] **P2-15 OpenAI 模型和音色可能需要更新机制**

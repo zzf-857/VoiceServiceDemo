@@ -71,6 +71,7 @@ public class TtsService
             if (vendorId == "aliyun") return await _aliyunProvider.FetchVoicesAsync();
             if (vendorId == "huoshan") return await _huoshanProvider.FetchVoicesAsync(apiKey);
             if (vendorId == "tencent") return await _tencentProvider.FetchVoicesAsync(apiKey);
+            if (vendorId == "google") return await _googleProvider.FetchVoicesAsync(apiKey);
             return new List<VoiceOption>();
         }
         catch
