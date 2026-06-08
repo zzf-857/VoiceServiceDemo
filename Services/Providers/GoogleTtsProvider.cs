@@ -42,7 +42,7 @@ public sealed class GoogleTtsProvider
         if (doc.RootElement.TryGetProperty("audioContent", out var audioBase64))
         {
             var audioBytes = Convert.FromBase64String(audioBase64.GetString()!);
-            var filePath = GetOutputFilePath();
+            var filePath = GetOutputFilePath(request.OutputFormat);
             await File.WriteAllBytesAsync(filePath, audioBytes);
 
             var vendor = VendorRegistry.GetById("google");
@@ -123,7 +123,7 @@ public sealed class GoogleTtsProvider
             },
             audioConfig = new
             {
-                audioEncoding = "MP3",
+                audioEncoding = ToAudioEncoding(request.OutputFormat),
                 speakingRate = request.Speed,
                 volumeGainDb = request.Volume
             }
@@ -132,11 +132,32 @@ public sealed class GoogleTtsProvider
         return JsonSerializer.Serialize(body);
     }
 
-    private string GetOutputFilePath()
+    public static string GetOutputFormatExtension(string outputFormat) =>
+        ToAudioEncoding(outputFormat) switch
+        {
+            "OGG_OPUS" => ".ogg",
+            "LINEAR16" or "MULAW" or "ALAW" => ".wav",
+            _ => ".mp3"
+        };
+
+    private static string ToAudioEncoding(string outputFormat)
+    {
+        var normalized = (outputFormat ?? "").Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "linear16" => "LINEAR16",
+            "ogg_opus" => "OGG_OPUS",
+            "mulaw" => "MULAW",
+            "alaw" => "ALAW",
+            _ => "MP3"
+        };
+    }
+
+    private string GetOutputFilePath(string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
         Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"google_{DateTime.Now:yyyyMMdd_HHmmss}.mp3");
+        return Path.Combine(dir, $"google_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(outputFormat)}");
     }
 
     private static string InferLanguageCode(string voiceId)

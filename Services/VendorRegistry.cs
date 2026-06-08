@@ -190,7 +190,8 @@ public static class VendorRegistry
             Capabilities = new VendorCapabilities
             {
                 SupportsSsml = true,
-                SupportedInputFormats = new() { TtsInputFormat.PlainText, TtsInputFormat.Ssml }
+                SupportedInputFormats = new() { TtsInputFormat.PlainText, TtsInputFormat.Ssml },
+                SupportedOutputFormats = new() { "mp3", "linear16", "ogg_opus", "mulaw", "alaw" }
             },
             SpeedDef = new TtsParameterDef { Min = 0.25, Max = 4.0, Default = 1.0, Step = 0.05 },
             VolumeDef = new TtsParameterDef { Min = -96, Max = 16, Default = 0, Step = 1 }, // gain DB

@@ -65,6 +65,11 @@
   - 已完成：Workspace 根据能力对象显示“输出格式”选择；`OpenAiTtsProvider` 将用户选择映射到 `response_format`，非法值回落到 `mp3`，保存文件扩展名随格式变化。
   - 已验证：新增自检覆盖 OpenAI `response_format`、非法格式回落、扩展名映射、Workspace 输出格式入口；自检和解决方案顺序构建通过。
   - 关联缺口：推进 P1-15；该大项仍需继续接入 Azure、Google、腾讯等厂商的格式/采样率能力。
+- [x] **接入 Google 输出编码选择**
+  - 已完成：Google 注册表声明 `mp3/linear16/ogg_opus/mulaw/alaw` 输出格式，复用 Workspace 的通用“输出格式”选择。
+  - 已完成：`GoogleTtsProvider` 将客户端格式映射到官方 `audioConfig.audioEncoding`，非法值回落到 `MP3`；`LINEAR16/MULAW/ALAW` 保存为 `.wav`，`OGG_OPUS` 保存为 `.ogg`。
+  - 已验证：新增自检覆盖 Google `audioEncoding` 映射、非法格式回落、扩展名映射和能力声明；自检和解决方案顺序构建通过。
+  - 关联缺口：继续推进 P1-15；Google 采样率 `sampleRateHertz` 和声道/码率仍待后续能力模型扩展。
 
 ## P0：核心生成链路
 
@@ -190,8 +195,8 @@
 ## P1：音频输出与播放
 
 - [ ] **P1-15 缺少音频格式选择**
-  - 现状：OpenAI 已可在 UI 选择 `mp3/opus/aac/flac/wav/pcm`，并映射到官方 `response_format`；其他厂商仍基本固定 MP3。
-  - 影响：Azure、Google、腾讯等仍无法测试 WAV、PCM、Opus、采样率、码率等输出差异。
+  - 现状：OpenAI 已可在 UI 选择 `mp3/opus/aac/flac/wav/pcm`，并映射到官方 `response_format`；Google 已可选择 `mp3/linear16/ogg_opus/mulaw/alaw` 并映射到 `audioEncoding`；其他厂商仍基本固定 MP3。
+  - 影响：Azure、腾讯等仍无法测试 WAV、PCM、Opus、采样率、码率等输出差异。
   - 建议：继续把能力模型扩展到采样率、码率和厂商专属格式枚举，UI 按厂商显示。
   - 验收：支持至少 MP3/WAV/PCM 的厂商可在 UI 选择。
 

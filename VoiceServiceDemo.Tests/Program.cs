@@ -508,7 +508,8 @@ var googlePlainJson = GoogleTtsProvider.BuildSynthesizeRequestJson(new TtsReques
     Text = "你好，Google。",
     Speed = 1.1,
     Volume = 2,
-    InputFormat = TtsInputFormat.PlainText
+    InputFormat = TtsInputFormat.PlainText,
+    OutputFormat = "ogg_opus"
 });
 using (var googlePlainDoc = JsonDocument.Parse(googlePlainJson))
 {
@@ -519,6 +520,10 @@ using (var googlePlainDoc = JsonDocument.Parse(googlePlainJson))
     AssertFalse(
         TryGetNested(googlePlainDoc.RootElement, out _, "input", "ssml"),
         "Google plain text request does not send input.ssml");
+    AssertTrue(
+        TryGetNested(googlePlainDoc.RootElement, out var googleAudioEncoding, "audioConfig", "audioEncoding"),
+        "Google request sends audioConfig.audioEncoding");
+    AssertEqual("OGG_OPUS", googleAudioEncoding.GetString(), "Google request maps selected output format to official audio encoding");
 }
 
 var googleSsmlJson = GoogleTtsProvider.BuildSynthesizeRequestJson(new TtsRequest
@@ -543,6 +548,25 @@ using (var googleSsmlDoc = JsonDocument.Parse(googleSsmlJson))
 }
 
 Console.WriteLine("Google provider request body tests passed.");
+
+var googleInvalidFormatJson = GoogleTtsProvider.BuildSynthesizeRequestJson(new TtsRequest
+{
+    VendorId = "google",
+    VoiceId = "cmn-CN-Wavenet-A",
+    Text = "格式回落。",
+    OutputFormat = "unsupported"
+});
+using (var googleInvalidFormatDoc = JsonDocument.Parse(googleInvalidFormatJson))
+{
+    AssertEqual(
+        "MP3",
+        googleInvalidFormatDoc.RootElement.GetProperty("audioConfig").GetProperty("audioEncoding").GetString(),
+        "Google request falls back to MP3 for unsupported output format");
+}
+
+AssertEqual(".wav", GoogleTtsProvider.GetOutputFormatExtension("linear16"), "Google LINEAR16 output uses wav extension");
+AssertEqual(".ogg", GoogleTtsProvider.GetOutputFormatExtension("ogg_opus"), "Google OGG_OPUS output uses ogg extension");
+AssertEqual(".mp3", GoogleTtsProvider.GetOutputFormatExtension("unknown"), "Google output extension falls back to mp3");
 
 var googleVoices = GoogleTtsProvider.ParseVoicesJson("""
 {
@@ -601,6 +625,8 @@ AssertFalse(huoshanVendor.Capabilities.SupportsSsml, "Huoshan vendor does not de
 var googleVendor = VendorRegistry.GetById("google") ?? throw new Exception("Google vendor config is missing");
 AssertTrue(googleVendor.Capabilities.SupportsSsml, "Google vendor declares SSML support");
 AssertTrue(googleVendor.Capabilities.SupportedInputFormats.Contains(TtsInputFormat.Ssml), "Google vendor exposes SSML as a supported input format");
+AssertTrue(googleVendor.Capabilities.SupportedOutputFormats.Contains("linear16"), "Google vendor exposes LINEAR16 output format");
+AssertTrue(googleVendor.Capabilities.SupportedOutputFormats.Contains("ogg_opus"), "Google vendor exposes OGG_OPUS output format");
 
 var openAiVendor = VendorRegistry.GetById("openai") ?? throw new Exception("OpenAI vendor config is missing");
 AssertTrue(openAiVendor.Capabilities.SupportsInstructions, "OpenAI vendor declares reading instructions support");
