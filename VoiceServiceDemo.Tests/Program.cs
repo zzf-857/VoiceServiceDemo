@@ -341,6 +341,28 @@ AssertTrue(invalidTencent.Message.Contains("SecretId|SecretKey"), "Tencent provi
 
 Console.WriteLine("Tencent provider boundary tests passed.");
 
+var baiduProvider = new BaiduTtsProvider(new HttpClient(), new SettingsService());
+var invalidBaidu = await baiduProvider.TestConnectivityAsync("only-api-key");
+AssertFalse(invalidBaidu.Success, "Baidu provider rejects one-part credentials without network call");
+AssertTrue(invalidBaidu.Message.Contains("api_key|secret_key"), "Baidu provider explains credential format");
+
+var baiduUrl = BaiduTtsProvider.BuildSynthesisUrl(new TtsRequest
+{
+    VendorId = "baidu",
+    VoiceId = "3",
+    Text = "你好 百度",
+    Speed = 6,
+    Volume = 9
+}, "token-123");
+AssertTrue(baiduUrl.StartsWith("https://tsn.baidu.com/text2audio?"), "Baidu synthesis URL uses text2audio endpoint");
+AssertTrue(baiduUrl.Contains("tex=%E4%BD%A0%E5%A5%BD%20%E7%99%BE%E5%BA%A6"), "Baidu synthesis URL encodes text");
+AssertTrue(baiduUrl.Contains("tok=token-123"), "Baidu synthesis URL includes access token");
+AssertTrue(baiduUrl.Contains("spd=6"), "Baidu synthesis URL maps speed");
+AssertTrue(baiduUrl.Contains("vol=9"), "Baidu synthesis URL maps volume");
+AssertTrue(baiduUrl.Contains("per=3"), "Baidu synthesis URL maps voice id");
+
+Console.WriteLine("Baidu provider boundary tests passed.");
+
 var openAiInstructionJson = OpenAiTtsProvider.BuildSpeechRequestJson(new TtsRequest
 {
     VendorId = "openai",

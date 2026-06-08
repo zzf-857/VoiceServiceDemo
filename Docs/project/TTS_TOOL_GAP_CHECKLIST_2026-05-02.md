@@ -45,6 +45,11 @@
   - 已完成：Workspace 的 Azure style 列表改为按选中音色动态显示；切换音色后会清空不再支持的已选 style。
   - 已验证：新增自检覆盖 `cheerful` / `sad` 可见、`angry` 被隐藏的动态过滤；自检和解决方案顺序构建通过。
   - 关联缺口：完成 P1-09 的基础动态过滤；更完整的 style 中文名表和离线内置音色 style 元数据可继续扩展。
+- [x] **拆分百度 TTS Provider**
+  - 已完成：新增 `BaiduTtsProvider`，承接百度凭证格式校验、access_token 获取、短文本合成 URL 构造和音频保存。
+  - 已完成：桌面端 `TtsService` 现在只负责路由，所有已注册客户端厂商的生成/连通性细节都在 `Services/Providers/` 下。
+  - 已验证：新增自检覆盖百度凭证格式本地拦截和合成 URL 参数映射；自检和解决方案顺序构建通过。
+  - 关联缺口：推进 P2-11；百度仍只覆盖旧短文本合成能力，P2-12 继续保留。
 
 ## P0：核心生成链路
 
@@ -266,13 +271,13 @@
 ## P2：厂商实现完整度
 
 - [ ] **P2-11 Provider 接口没有统一抽象**
-  - 现状：阿里、火山、腾讯、Google、OpenAI、Azure 已拆成 provider；百度仍在 `TtsService`。
-  - 影响：功能扩展会让 `TtsService` 继续膨胀。
+  - 现状：阿里、火山、腾讯、Google、OpenAI、Azure、百度已拆成 provider；但 provider 之间还没有共同接口或统一能力声明方法。
+  - 影响：功能扩展虽然不再集中堆到 `TtsService`，但仍依赖手写路由和各 provider 自己暴露方法。
   - 建议：引入 `ITtsProvider`，统一 `GenerateAsync`、`FetchVoicesAsync`、`TestConnectivityAsync`、`GetCapabilities`。
   - 验收：`TtsService` 只负责路由和公共流程。
 
 - [ ] **P2-12 百度能力过旧**
-  - 现状：百度只接短文本在线合成，音色列表硬编码。
+  - 现状：百度已拆成独立 provider，但仍只接短文本在线合成，音色列表硬编码。
   - 影响：精品音库、长文本、更多参数未覆盖。
   - 建议：按当前百度接口重新梳理模型、音色、参数能力。
   - 验收：百度工作区能力与当前控制台能力基本一致。
