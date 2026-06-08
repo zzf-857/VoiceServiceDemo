@@ -13,11 +13,19 @@
     {
         var v = vendor;
         var hasKey = !string.IsNullOrWhiteSpace(SettingsService.GetApiKey(v.Id));
+        var iconPath = GetVendorIconPath(v.Id);
 
         <div class="vendor-card" @onclick="() => OpenVendor(v.Id)">
             <div class="vendor-card-header">
                 <div class="vendor-icon-box">
-                    @((MarkupString)GetVendorSvg(v.IconName))
+                    @if (!string.IsNullOrEmpty(iconPath))
+                    {
+                        <img class="vendor-brand-icon" src="@iconPath" alt="" />
+                    }
+                    else
+                    {
+                        @((MarkupString)GetVendorSvg(v.IconName))
+                    }
                 </div>
                 <h3>@v.Name</h3>
             </div>
@@ -52,6 +60,19 @@
     {
         Navigation.NavigateTo($"/settings?focus={vendorId}");
     }
+
+    private static string GetVendorIconPath(string vendorId) => vendorId switch
+    {
+        "huoshan" => "assets/vendor-icons/huoshan.png",
+        "tencent" => "assets/vendor-icons/tencent.ico",
+        "aliyun" => "assets/vendor-icons/aliyun.ico",
+        "xiaomi_mimo" => "assets/vendor-icons/xiaomi_mimo.png",
+        "baidu" => "assets/vendor-icons/baidu.ico",
+        "azure" => "assets/vendor-icons/azure.ico",
+        "google" => "assets/vendor-icons/google.ico",
+        "openai" => "assets/vendor-icons/openai.svg",
+        _ => ""
+    };
 
     private string GetVendorSvg(string iconName) => iconName switch
     {

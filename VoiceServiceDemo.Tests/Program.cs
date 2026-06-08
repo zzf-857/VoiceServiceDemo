@@ -978,6 +978,36 @@ AssertTrue(settingsMarkup.Contains("关键链接"), "Settings exposes the vendor
 AssertTrue(settingsMarkup.Contains("vendor.ImportantLinks"), "Settings renders links from the shared vendor important link registry");
 AssertTrue(settingsMarkup.Contains("MIMO_API_KEY"), "Settings explains Xiaomi MiMo credential naming");
 
+var homeRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Home.razor");
+var homeMarkup = await File.ReadAllTextAsync(homeRazorPath);
+AssertTrue(homeMarkup.Contains("vendor-brand-icon"), "Home page renders real vendor brand icons");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/huoshan.png"), "Home page uses local Volcengine brand icon");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/tencent.ico"), "Home page uses local Tencent Cloud brand icon");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/aliyun.ico"), "Home page uses local Aliyun brand icon");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/xiaomi_mimo.png"), "Home page uses local Xiaomi MiMo brand icon");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/baidu.ico"), "Home page uses local Baidu brand icon");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/azure.ico"), "Home page uses local Azure brand icon");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/google.ico"), "Home page uses local Google Cloud brand icon");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/openai.svg"), "Home page uses local OpenAI brand icon");
+
+var vendorIconRoot = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "assets", "vendor-icons");
+foreach (var iconFile in new[]
+{
+    "huoshan.png",
+    "tencent.ico",
+    "aliyun.ico",
+    "xiaomi_mimo.png",
+    "baidu.ico",
+    "azure.ico",
+    "google.ico",
+    "openai.svg"
+})
+{
+    var iconPath = Path.Combine(vendorIconRoot, iconFile);
+    AssertTrue(File.Exists(iconPath), $"Vendor icon file exists: {iconFile}");
+    AssertTrue(new FileInfo(iconPath).Length > 128, $"Vendor icon file is not empty: {iconFile}");
+}
+
 var workspaceRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Workspace.razor");
 var workspaceMarkup = await File.ReadAllTextAsync(workspaceRazorPath);
 AssertTrue(workspaceMarkup.Contains("_vendor.ImportantLinks"), "Workspace renders links from the shared vendor important link registry");
@@ -1001,6 +1031,12 @@ var appCss = await File.ReadAllTextAsync(appCssPath);
 AssertTrue(appCss.Contains(".credential-row-input") && appCss.Contains("flex-wrap: wrap"), "Settings credential row can wrap long test feedback without squeezing labels");
 AssertTrue(appCss.Contains(".credential-test-result") && appCss.Contains("overflow-wrap: anywhere"), "Settings test feedback breaks very long provider messages");
 AssertTrue(appCss.Contains(".credential-test-result") && appCss.Contains("white-space: normal"), "Settings test feedback keeps long messages in normal wrapping flow");
+AssertTrue(appCss.Contains(".vendor-brand-icon") && appCss.Contains("object-fit: contain"), "Vendor brand icons keep their native proportions");
+AssertFalse(appCss.Contains("width: 100vw;"), "Shell layout avoids 100vw horizontal resize jumps");
+AssertTrue(appCss.Contains("@media (max-width: 1360px)"), "Workspace stacks before the two-column grid exceeds the sidebar-adjusted content width");
+AssertFalse(appCss.Contains("grid-template-columns: minmax(620px, 1fr) minmax(340px, 372px);"), "Workspace grid does not keep oversized fixed minimum columns");
+AssertTrue(appCss.Contains("grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);"), "Workspace grid uses a flexible main column and a bounded control column");
+AssertTrue(appCss.Contains("grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));"), "Voice card grid adapts to available content width instead of viewport breakpoints");
 
 Console.WriteLine("Settings credential UX markup tests passed.");
 
