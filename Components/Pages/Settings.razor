@@ -190,16 +190,16 @@
                             <span>测试连通</span>
                         }
                     </button>
+                    @if (_testResults.ContainsKey(vid))
+                    {
+                        var result = _testResults[vid];
+                        <div class="credential-test-result">
+                            <span style="color:@(result.Success ? "#4ade80" : "#fca5a5");">
+                                @result.Message
+                            </span>
+                        </div>
+                    }
                 </div>
-                @if (_testResults.ContainsKey(vid))
-                {
-                    var result = _testResults[vid];
-                    <div class="credential-test-result">
-                        <span style="color:@(result.Success ? "#4ade80" : "#fca5a5");">
-                            @result.Message
-                        </span>
-                    </div>
-                }
             </div>
         }
     </div>
@@ -254,15 +254,20 @@
 </div>
 
 <div class="settings-section" style="margin-top: 24px;">
-    <h3>厂商官方文档快速跳转</h3>
+    <h3>厂商关键链接</h3>
     <div class="settings-box">
         @foreach (var vendor in VendorRegistry.All)
         {
             <div class="settings-row">
                 <div class="row-label">@vendor.Name</div>
-                <div class="row-input" style="display:flex;align-items:center;gap:12px;">
-                    <span style="font-size:13px;color:var(--text-muted);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">@vendor.DocumentationUrl</span>
-                    <a href="@vendor.DocumentationUrl" target="_blank" class="btn btn-outline" style="padding:6px 12px;font-size:12px;text-decoration:none;white-space:nowrap;">打开</a>
+                <div class="row-input important-link-row">
+                    @foreach (var link in GetVendorLinks(vendor, vendor.ImportantLinks))
+                    {
+                        <a href="@link.Url" target="_blank" class="important-link-item" title="@link.Description">
+                            <span class="important-link-item-label">@link.Label</span>
+                            <span class="important-link-item-url">@link.Url</span>
+                        </a>
+                    }
                 </div>
             </div>
         }
@@ -436,6 +441,22 @@
             StateHasChanged();
         }
         catch (TaskCanceledException) { }
+    }
+
+    private static IEnumerable<VendorLink> GetVendorLinks(VendorConfig vendor, IEnumerable<VendorLink> importantLinks)
+    {
+        if (!string.IsNullOrWhiteSpace(vendor.DocumentationUrl))
+        {
+            yield return new VendorLink
+            {
+                Label = "官方文档",
+                Url = vendor.DocumentationUrl,
+                Description = "打开厂商官方接入文档"
+            };
+        }
+
+        foreach (var link in importantLinks)
+            yield return link;
     }
 
     private HuoshanCredentials GetHuoshanCredentials() =>

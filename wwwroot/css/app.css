@@ -527,6 +527,41 @@ html, body, #app {
     text-decoration: none;
 }
 
+.important-link-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 16px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.important-link-label {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+}
+
+.important-link-list {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.important-link {
+    min-height: 32px;
+    padding: 7px 10px;
+    gap: 6px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
 .vendor-note {
     display: flex;
     align-items: center;
@@ -1276,9 +1311,49 @@ html, body, #app {
     flex: 1;
 }
 
+.important-link-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+    min-width: 0;
+}
+
+.important-link-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.important-link-item:hover {
+    border-color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.important-link-item-label {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.important-link-item-url {
+    overflow: hidden;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .credential-row-input {
     display: flex;
     align-items: flex-start;
+    flex-wrap: wrap;
     gap: 12px;
     min-width: 0;
 }
@@ -1390,9 +1465,20 @@ html, body, #app {
 }
 
 .credential-test-result {
-    margin-left: 192px;
-    margin-top: 8px;
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
     font-size: 13px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    word-break: break-word;
+}
+
+.credential-test-result span {
+    display: block;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .icon-ghost-btn {
@@ -1660,11 +1746,17 @@ html, body, #app {
     }
 
     .generation-readiness,
+    .important-link-strip,
     .vendor-note,
     .section-heading,
     .voice-pagination {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .important-link,
+    .important-link-list {
+        width: 100%;
     }
 
     .settings-row {

@@ -305,12 +305,43 @@ AssertTrue(invalidTencent.Message.Contains("SecretId|SecretKey"), "Tencent provi
 
 Console.WriteLine("Tencent provider boundary tests passed.");
 
+var huoshanVendor = VendorRegistry.GetById("huoshan") ?? throw new Exception("Huoshan vendor config is missing");
+AssertTrue(
+    huoshanVendor.ImportantLinks.Any(link =>
+        link.Label == "凭证参数获取" &&
+        link.Url.StartsWith("https://www.volcengine.com/docs/6561/196768?lang=zh#q1", StringComparison.Ordinal)),
+    "Huoshan vendor exposes the official credential parameter guide as an important link");
+AssertTrue(
+    huoshanVendor.ImportantLinks.Any(link =>
+        link.Label == "TTS 模型实验室" &&
+        link.Url == "https://console.volcengine.com/ark/region:ark+cn-beijing/experience/voice?modelId=doubao-seed-tts-2-0&tab=TTS"),
+    "Huoshan vendor exposes the Ark TTS model lab as an important link");
+AssertTrue(
+    huoshanVendor.ImportantLinks.Any(link =>
+        link.Label == "豆包语音体验" &&
+        link.Url == "https://console.volcengine.com/speech/new/overview?projectName=default"),
+    "Huoshan vendor exposes the Doubao speech experience entry as an important link");
+
+Console.WriteLine("Vendor important link registry tests passed.");
+
 var settingsRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Settings.razor");
 var settingsMarkup = await File.ReadAllTextAsync(settingsRazorPath);
 AssertTrue(settingsMarkup.Contains("credential-field-label"), "Settings credential inputs have persistent labels");
 AssertTrue(settingsMarkup.Contains("生成语音必填"), "Settings explains required speech generation credentials");
 AssertTrue(settingsMarkup.Contains("仅刷新全量音色库"), "Settings explains voice library refresh credentials");
 AssertTrue(settingsMarkup.Contains("API Key / 凭证"), "Settings generic credential input has a visible label");
+AssertTrue(settingsMarkup.Contains("关键链接"), "Settings exposes the vendor important links section");
+AssertTrue(settingsMarkup.Contains("vendor.ImportantLinks"), "Settings renders links from the shared vendor important link registry");
+
+var workspaceRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Workspace.razor");
+var workspaceMarkup = await File.ReadAllTextAsync(workspaceRazorPath);
+AssertTrue(workspaceMarkup.Contains("_vendor.ImportantLinks"), "Workspace renders links from the shared vendor important link registry");
+
+var appCssPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "css", "app.css");
+var appCss = await File.ReadAllTextAsync(appCssPath);
+AssertTrue(appCss.Contains(".credential-row-input") && appCss.Contains("flex-wrap: wrap"), "Settings credential row can wrap long test feedback without squeezing labels");
+AssertTrue(appCss.Contains(".credential-test-result") && appCss.Contains("overflow-wrap: anywhere"), "Settings test feedback breaks very long provider messages");
+AssertTrue(appCss.Contains(".credential-test-result") && appCss.Contains("white-space: normal"), "Settings test feedback keeps long messages in normal wrapping flow");
 
 Console.WriteLine("Settings credential UX markup tests passed.");
 

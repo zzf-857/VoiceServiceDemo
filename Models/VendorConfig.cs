@@ -11,6 +11,7 @@ public class VendorConfig
     public string IconName { get; set; } = "mic"; // lucide icon name
     public string ApiBaseUrl { get; set; } = "";
     public string DocumentationUrl { get; set; } = "";
+    public List<VendorLink> ImportantLinks { get; set; } = new();
     public List<VoiceModel> DefaultModels { get; set; } = new();
     public List<VoiceOption> DefaultVoices { get; set; } = new();
     public bool SupportsModelFetch { get; set; } = false;
@@ -25,6 +26,16 @@ public class VendorConfig
     /// 厂商特有的音量参数定义
     /// </summary>
     public TtsParameterDef VolumeDef { get; set; } = new();
+}
+
+/// <summary>
+/// 厂商控制台、模型实验室等关键跳转入口。
+/// </summary>
+public class VendorLink
+{
+    public string Label { get; set; } = "";
+    public string Url { get; set; } = "";
+    public string Description { get; set; } = "";
 }
 
 /// <summary>

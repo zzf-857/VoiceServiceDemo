@@ -33,6 +33,13 @@ temp/
 *.mp3
 *.pcm
 
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
 # OS files
 Thumbs.db
 Desktop.ini

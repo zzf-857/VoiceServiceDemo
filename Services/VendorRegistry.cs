@@ -18,6 +18,27 @@ public static class VendorRegistry
             IconName = "flame",
             ApiBaseUrl = "https://openspeech.bytedance.com/api/v3/tts/unidirectional",
             DocumentationUrl = "https://www.volcengine.com/docs/6561/1257536",
+            ImportantLinks = new()
+            {
+                new VendorLink
+                {
+                    Label = "凭证参数获取",
+                    Url = "https://www.volcengine.com/docs/6561/196768?lang=zh#q1%EF%BC%9A%E5%93%AA%E9%87%8C%E5%8F%AF%E4%BB%A5%E8%8E%B7%E5%8F%96%E5%88%B0%E4%BB%A5%E4%B8%8B%E5%8F%82%E6%95%B0appid%EF%BC%8Ccluster%EF%BC%8Ctoken%EF%BC%8Cauthorization-type%EF%BC%8Csecret-key-%EF%BC%9F",
+                    Description = "AppID、Cluster、Token、Authorization Type、Secret Key 获取说明"
+                },
+                new VendorLink
+                {
+                    Label = "TTS 模型实验室",
+                    Url = "https://console.volcengine.com/ark/region:ark+cn-beijing/experience/voice?modelId=doubao-seed-tts-2-0&tab=TTS",
+                    Description = "打开豆包语音合成 2.0 官方体验页"
+                },
+                new VendorLink
+                {
+                    Label = "豆包语音体验",
+                    Url = "https://console.volcengine.com/speech/new/overview?projectName=default",
+                    Description = "打开豆包语音体验入口"
+                }
+            },
             SpeedDef = new TtsParameterDef { Min = 0.5, Max = 2.0, Default = 1.0, Step = 0.1 },
             VolumeDef = new TtsParameterDef { Min = 0.1, Max = 3.0, Default = 1.0, Step = 0.1 },
             SupportsModelFetch = false,
