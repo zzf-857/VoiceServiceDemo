@@ -60,6 +60,11 @@
   - 已完成：`TencentTtsProvider` 提供可测试的 `TextToVoice` 请求体构建器，只有选中官方支持的情感类别时才发送 `EmotionCategory` / `EmotionIntensity`，强度按官方 `[50,200]` 范围夹取。
   - 已验证：新增自检覆盖腾讯基础请求不误发情感字段、情感请求发送类别和强度、强度夹取、Workspace 腾讯表达入口；自检和解决方案顺序构建通过。
   - 关联缺口：完成 P1-12 的基础接入；腾讯官方说明该参数仅支持多情感音色，普通音色是否生效以接口返回为准。
+- [x] **接入 OpenAI 输出格式选择**
+  - 已完成：能力模型增加 `SupportedOutputFormats`，OpenAI 注册表声明 `mp3/opus/aac/flac/wav/pcm`。
+  - 已完成：Workspace 根据能力对象显示“输出格式”选择；`OpenAiTtsProvider` 将用户选择映射到 `response_format`，非法值回落到 `mp3`，保存文件扩展名随格式变化。
+  - 已验证：新增自检覆盖 OpenAI `response_format`、非法格式回落、扩展名映射、Workspace 输出格式入口；自检和解决方案顺序构建通过。
+  - 关联缺口：推进 P1-15；该大项仍需继续接入 Azure、Google、腾讯等厂商的格式/采样率能力。
 
 ## P0：核心生成链路
 
@@ -185,9 +190,9 @@
 ## P1：音频输出与播放
 
 - [ ] **P1-15 缺少音频格式选择**
-  - 现状：基本固定 MP3。
-  - 影响：无法测试 WAV、PCM、Opus、采样率、码率等输出差异。
-  - 建议：能力模型增加格式、采样率、码率，UI 按厂商显示。
+  - 现状：OpenAI 已可在 UI 选择 `mp3/opus/aac/flac/wav/pcm`，并映射到官方 `response_format`；其他厂商仍基本固定 MP3。
+  - 影响：Azure、Google、腾讯等仍无法测试 WAV、PCM、Opus、采样率、码率等输出差异。
+  - 建议：继续把能力模型扩展到采样率、码率和厂商专属格式枚举，UI 按厂商显示。
   - 验收：支持至少 MP3/WAV/PCM 的厂商可在 UI 选择。
 
 - [ ] **P1-16 缺少音频时长、采样率、码率等元数据**

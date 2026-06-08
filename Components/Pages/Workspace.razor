@@ -352,6 +352,20 @@
                 </div>
             }
 
+            @if (SupportsOutputFormatControls)
+            {
+                <div class="emotion-row output-format-row">
+                    <span>输出格式</span>
+                    @foreach (var format in OutputFormatOptions)
+                    {
+                        <button class="@($"filter-chip {(_outputFormat == format ? "active" : "")}")"
+                                @onclick="@(() => _outputFormat = format)">
+                            @GetOutputFormatLabel(format)
+                        </button>
+                    }
+                </div>
+            }
+
             <div class="voice-sliders">
                 @if (_vendor.SpeedDef.IsSupported)
                 {
@@ -532,6 +546,7 @@
     private string _selectedStyle = "";
     private string _instructions = "";
     private TtsInputFormat _inputFormat = TtsInputFormat.PlainText;
+    private string _outputFormat = "mp3";
     private double _styleDegree = 1.0;
     private string _ssmlText = "";
     private const int VoicePageSize = 36;
@@ -597,6 +612,7 @@
     private bool SupportsStyleControls => VendorCapabilities.SupportsStyle;
     private bool SupportsStyleDegreeControls => VendorCapabilities.SupportsStyleDegree;
     private bool SupportsEmotionControls => VendorCapabilities.SupportsEmotion;
+    private bool SupportsOutputFormatControls => VendorCapabilities.SupportedOutputFormats.Any();
     private bool SupportsInstructionsControls =>
         VendorCapabilities.SupportsInstructions &&
         (_selectedModelId.StartsWith("gpt-4o", StringComparison.OrdinalIgnoreCase) ||
@@ -616,6 +632,7 @@
     };
     private string InputFieldLabel => SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml ? "SSML 文本" : "测试文本";
     private string CurrentInputText => SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml ? _ssmlText : _inputText;
+    private IReadOnlyList<string> OutputFormatOptions => VendorCapabilities.SupportedOutputFormats;
     private List<TtsExpressionOption> HuoshanEmotionOptions => _selectedVoice == null ? new() : GetHuoshanEmotionOptions(_selectedVoice).ToList();
     private bool HasHuoshanEmotionControls => _selectedVoice != null && HuoshanEmotionPolicy.HasSelectableEmotionControls(_selectedVoice);
     private IReadOnlyList<TtsExpressionOption> TencentEmotionOptions => TencentEmotionPolicy.GetOptions();
@@ -665,6 +682,8 @@
         if (_inputFormat == TtsInputFormat.Ssml && string.IsNullOrWhiteSpace(_ssmlText))
             _ssmlText = BuildSsmlStarter();
     }
+
+    private static string GetOutputFormatLabel(string format) => format.ToUpperInvariant();
 
     private string BuildSsmlStarter()
     {
@@ -864,6 +883,7 @@
             _selectedStyle = "";
             _selectedEmotion = "";
             _emotionIntensity = TencentEmotionPolicy.DefaultIntensity;
+            _outputFormat = _vendor.Capabilities.SupportedOutputFormats.FirstOrDefault() ?? "mp3";
             _styleDegree = 1.0;
             _ssmlText = "";
 
@@ -1012,6 +1032,7 @@
             StyleDegree = _styleDegree,
             Emotion = GetRequestEmotion(),
             EmotionIntensity = IsTencent ? _emotionIntensity : TencentEmotionPolicy.DefaultIntensity,
+            OutputFormat = SupportsOutputFormatControls ? _outputFormat : "mp3",
             ResourceId = SupportsEmotionControls && IsHuoshan && _selectedVoice != null ? HuoshanEmotionPolicy.GetResourceId(_selectedVoice) : "",
             Instructions = SupportsInstructionsControls ? _instructions : "",
             SsmlText = SupportsSsmlControls ? _ssmlText : ""
@@ -1143,11 +1164,17 @@
 
         try
         {
+            var extension = Path.GetExtension(_result.FilePath);
+            var formatLabel = string.IsNullOrWhiteSpace(extension)
+                ? "音频"
+                : extension.TrimStart('.').ToUpperInvariant();
             var dialog = new Microsoft.Win32.SaveFileDialog
             {
                 Title = "选择要保存音频的位置",
                 FileName = Path.GetFileName(_result.FilePath),
-                Filter = "MP3 音频|*.mp3|所有文件|*.*",
+                Filter = string.IsNullOrWhiteSpace(extension)
+                    ? "音频文件|*.*|所有文件|*.*"
+                    : $"{formatLabel} 音频|*{extension}|所有文件|*.*",
                 InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
             };
 

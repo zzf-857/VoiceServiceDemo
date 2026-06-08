@@ -50,6 +50,7 @@ public class VendorCapabilities
     public bool SupportsEmotion { get; set; }
     public bool SupportsInstructions { get; set; }
     public List<TtsInputFormat> SupportedInputFormats { get; set; } = new() { TtsInputFormat.PlainText };
+    public List<string> SupportedOutputFormats { get; set; } = new();
 
     public bool HasExpressionControls =>
         SupportsSsml ||
@@ -145,6 +146,7 @@ public class TtsRequest
     public double StyleDegree { get; set; } = 1.0;
     public string Emotion { get; set; } = "";
     public int EmotionIntensity { get; set; } = 100;
+    public string OutputFormat { get; set; } = "mp3";
     public string ResourceId { get; set; } = "";
     public string Role { get; set; } = "";
     public string Instructions { get; set; } = "";

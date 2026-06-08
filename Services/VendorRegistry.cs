@@ -219,7 +219,8 @@ public static class VendorRegistry
             DocumentationUrl = "https://platform.openai.com/docs/guides/text-to-speech",
             Capabilities = new VendorCapabilities
             {
-                SupportsInstructions = true
+                SupportsInstructions = true,
+                SupportedOutputFormats = new() { "mp3", "opus", "aac", "flac", "wav", "pcm" }
             },
             SpeedDef = new TtsParameterDef { Min = 0.25, Max = 4.0, Default = 1.0, Step = 0.05 },
             VolumeDef = new TtsParameterDef { IsSupported = false },

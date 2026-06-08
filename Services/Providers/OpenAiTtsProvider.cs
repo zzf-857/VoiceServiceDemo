@@ -42,7 +42,7 @@ public sealed class OpenAiTtsProvider
         }
 
         var audioBytes = await response.Content.ReadAsByteArrayAsync();
-        var filePath = GetOutputFilePath();
+        var filePath = GetOutputFilePath(request.OutputFormat);
         await File.WriteAllBytesAsync(filePath, audioBytes);
 
         var vendor = VendorRegistry.GetById("openai");
@@ -65,7 +65,7 @@ public sealed class OpenAiTtsProvider
             ["input"] = request.Text,
             ["voice"] = request.VoiceId,
             ["speed"] = request.Speed,
-            ["response_format"] = "mp3"
+            ["response_format"] = NormalizeResponseFormat(request.OutputFormat)
         };
 
         if (SupportsInstructions(request.ModelId) && !string.IsNullOrWhiteSpace(request.Instructions))
@@ -77,10 +77,21 @@ public sealed class OpenAiTtsProvider
     public static bool SupportsInstructions(string modelId) =>
         modelId.StartsWith("gpt-4o", StringComparison.OrdinalIgnoreCase);
 
-    private string GetOutputFilePath()
+    public static string GetResponseFormatExtension(string responseFormat) =>
+        "." + NormalizeResponseFormat(responseFormat);
+
+    private static string NormalizeResponseFormat(string responseFormat)
+    {
+        var normalized = (responseFormat ?? "").Trim().ToLowerInvariant();
+        return normalized is "mp3" or "opus" or "aac" or "flac" or "wav" or "pcm"
+            ? normalized
+            : "mp3";
+    }
+
+    private string GetOutputFilePath(string responseFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
         Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"openai_{DateTime.Now:yyyyMMdd_HHmmss}.mp3");
+        return Path.Combine(dir, $"openai_{DateTime.Now:yyyyMMdd_HHmmss}{GetResponseFormatExtension(responseFormat)}");
     }
 }

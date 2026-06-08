@@ -455,6 +455,7 @@ var openAiInstructionJson = OpenAiTtsProvider.BuildSpeechRequestJson(new TtsRequ
     VoiceId = "nova",
     Text = "欢迎使用 VoiceOps。",
     Speed = 1.0,
+    OutputFormat = "wav",
     Instructions = "用温柔但专业的语气朗读。"
 });
 using (var openAiInstructionDoc = JsonDocument.Parse(openAiInstructionJson))
@@ -463,6 +464,7 @@ using (var openAiInstructionDoc = JsonDocument.Parse(openAiInstructionJson))
         TryGetNested(openAiInstructionDoc.RootElement, out var instructions, "instructions"),
         "OpenAI supported TTS model request includes instructions");
     AssertEqual("用温柔但专业的语气朗读。", instructions.GetString(), "OpenAI request preserves reading instructions");
+    AssertEqual("wav", openAiInstructionDoc.RootElement.GetProperty("response_format").GetString(), "OpenAI request sends selected response format");
 }
 
 var openAiLegacyJson = OpenAiTtsProvider.BuildSpeechRequestJson(new TtsRequest
@@ -480,6 +482,22 @@ using (var openAiLegacyDoc = JsonDocument.Parse(openAiLegacyJson))
         TryGetNested(openAiLegacyDoc.RootElement, out _, "instructions"),
         "OpenAI legacy TTS request omits unsupported instructions");
 }
+
+var openAiInvalidFormatJson = OpenAiTtsProvider.BuildSpeechRequestJson(new TtsRequest
+{
+    VendorId = "openai",
+    ModelId = "gpt-4o-mini-tts",
+    VoiceId = "nova",
+    Text = "欢迎使用 VoiceOps。",
+    OutputFormat = "unsupported"
+});
+using (var openAiInvalidFormatDoc = JsonDocument.Parse(openAiInvalidFormatJson))
+{
+    AssertEqual("mp3", openAiInvalidFormatDoc.RootElement.GetProperty("response_format").GetString(), "OpenAI request falls back to mp3 for unsupported response format");
+}
+
+AssertEqual(".flac", OpenAiTtsProvider.GetResponseFormatExtension("flac"), "OpenAI provider maps FLAC response format to file extension");
+AssertEqual(".mp3", OpenAiTtsProvider.GetResponseFormatExtension("unknown"), "OpenAI provider falls back to mp3 extension");
 
 Console.WriteLine("OpenAI provider request body tests passed.");
 
@@ -586,6 +604,8 @@ AssertTrue(googleVendor.Capabilities.SupportedInputFormats.Contains(TtsInputForm
 
 var openAiVendor = VendorRegistry.GetById("openai") ?? throw new Exception("OpenAI vendor config is missing");
 AssertTrue(openAiVendor.Capabilities.SupportsInstructions, "OpenAI vendor declares reading instructions support");
+AssertTrue(openAiVendor.Capabilities.SupportedOutputFormats.Contains("wav"), "OpenAI vendor exposes WAV output format");
+AssertTrue(openAiVendor.Capabilities.SupportedOutputFormats.Contains("pcm"), "OpenAI vendor exposes PCM output format");
 
 var tencentVendor = VendorRegistry.GetById("tencent") ?? throw new Exception("Tencent vendor config is missing");
 AssertTrue(tencentVendor.Capabilities.SupportsEmotion, "Tencent vendor declares emotion controls");
@@ -611,6 +631,9 @@ AssertTrue(workspaceMarkup.Contains("OpenAI 使用朗读指导"), "Workspace giv
 AssertTrue(workspaceMarkup.Contains("TencentEmotionOptions"), "Workspace renders Tencent emotion options");
 AssertTrue(workspaceMarkup.Contains("EmotionIntensity"), "Workspace sends Tencent emotion intensity");
 AssertTrue(workspaceMarkup.Contains("腾讯使用 EmotionCategory"), "Workspace gives Tencent-specific emotion guidance");
+AssertTrue(workspaceMarkup.Contains("SupportsOutputFormatControls"), "Workspace can render output format controls from vendor capabilities");
+AssertTrue(workspaceMarkup.Contains("OutputFormatOptions"), "Workspace renders output format options");
+AssertTrue(workspaceMarkup.Contains("OutputFormat ="), "Workspace sends selected output format");
 
 var appCssPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "css", "app.css");
 var appCss = await File.ReadAllTextAsync(appCssPath);
