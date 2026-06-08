@@ -63,7 +63,7 @@ public sealed class AzureTtsProvider
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
         httpRequest.Headers.Add("Ocp-Apim-Subscription-Key", keys.Value.SubscriptionKey);
         httpRequest.Content = new StringContent(ssml, Encoding.UTF8, "application/ssml+xml");
-        httpRequest.Headers.Add("X-Microsoft-OutputFormat", "audio-16khz-128kbitrate-mono-mp3");
+        httpRequest.Headers.Add("X-Microsoft-OutputFormat", GetOutputFormatHeader(request.OutputFormat));
 
         var response = await _httpClient.SendAsync(httpRequest);
         if (!response.IsSuccessStatusCode)
@@ -73,7 +73,7 @@ public sealed class AzureTtsProvider
         }
 
         var audioBytes = await response.Content.ReadAsByteArrayAsync();
-        var filePath = GetOutputFilePath();
+        var filePath = GetOutputFilePath(request.OutputFormat);
         await File.WriteAllBytesAsync(filePath, audioBytes);
 
         var vendor = VendorRegistry.GetById("azure");
@@ -118,11 +118,39 @@ public sealed class AzureTtsProvider
         return voices;
     }
 
-    private string GetOutputFilePath()
+    public static string GetOutputFormatHeader(string outputFormat) =>
+        NormalizeOutputFormat(outputFormat) switch
+        {
+            "mp3_24k" => "audio-24khz-160kbitrate-mono-mp3",
+            "riff_16k_pcm" => "riff-16khz-16bit-mono-pcm",
+            "riff_24k_pcm" => "riff-24khz-16bit-mono-pcm",
+            "raw_16k_pcm" => "raw-16khz-16bit-mono-pcm",
+            "ogg_24k_opus" => "ogg-24khz-16bit-mono-opus",
+            _ => "audio-16khz-128kbitrate-mono-mp3"
+        };
+
+    public static string GetOutputFormatExtension(string outputFormat) =>
+        NormalizeOutputFormat(outputFormat) switch
+        {
+            "riff_16k_pcm" or "riff_24k_pcm" => ".wav",
+            "raw_16k_pcm" => ".pcm",
+            "ogg_24k_opus" => ".ogg",
+            _ => ".mp3"
+        };
+
+    private static string NormalizeOutputFormat(string outputFormat)
+    {
+        var normalized = (outputFormat ?? "").Trim().ToLowerInvariant();
+        return normalized is "mp3_16k" or "mp3_24k" or "riff_16k_pcm" or "riff_24k_pcm" or "raw_16k_pcm" or "ogg_24k_opus"
+            ? normalized
+            : "mp3_16k";
+    }
+
+    private string GetOutputFilePath(string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
         Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"azure_{DateTime.Now:yyyyMMdd_HHmmss}.mp3");
+        return Path.Combine(dir, $"azure_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(outputFormat)}");
     }
 
     private static (string SubscriptionKey, string Region)? ParseCredentials(string apiKey)

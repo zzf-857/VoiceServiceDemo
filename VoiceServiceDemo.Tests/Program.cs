@@ -305,6 +305,21 @@ AssertFalse(azureStyleOptions.Any(style => style.Id == "angry"), "Azure style po
 
 Console.WriteLine("Azure voice parser tests passed.");
 
+AssertEqual(
+    "riff-24khz-16bit-mono-pcm",
+    AzureTtsProvider.GetOutputFormatHeader("riff_24k_pcm"),
+    "Azure provider maps client output format to REST output header");
+AssertEqual(
+    "audio-16khz-128kbitrate-mono-mp3",
+    AzureTtsProvider.GetOutputFormatHeader("unsupported"),
+    "Azure provider falls back to default MP3 output header");
+AssertEqual(".wav", AzureTtsProvider.GetOutputFormatExtension("riff_16k_pcm"), "Azure RIFF PCM output uses wav extension");
+AssertEqual(".pcm", AzureTtsProvider.GetOutputFormatExtension("raw_16k_pcm"), "Azure raw PCM output uses pcm extension");
+AssertEqual(".ogg", AzureTtsProvider.GetOutputFormatExtension("ogg_24k_opus"), "Azure OGG Opus output uses ogg extension");
+AssertEqual(".mp3", AzureTtsProvider.GetOutputFormatExtension("unknown"), "Azure output extension falls back to mp3");
+
+Console.WriteLine("Azure output format policy tests passed.");
+
 var huoshanProvider = new HuoshanTtsProvider(new HttpClient(), new SettingsService());
 var noNetworkConnectivity = await huoshanProvider.TestConnectivityAsync("app-123|token-abc");
 AssertTrue(noNetworkConnectivity.Success, "Huoshan provider accepts basic speech credentials without OpenAPI call");
@@ -647,6 +662,8 @@ AssertTrue(azureVendor.Capabilities.SupportsSsml, "Azure vendor declares SSML su
 AssertTrue(azureVendor.Capabilities.SupportsStyle, "Azure vendor declares speaking style support");
 AssertTrue(azureVendor.Capabilities.SupportsStyleDegree, "Azure vendor declares style degree support");
 AssertTrue(azureVendor.Capabilities.SupportedInputFormats.Contains(TtsInputFormat.Ssml), "Azure vendor exposes SSML as a supported input format");
+AssertTrue(azureVendor.Capabilities.SupportedOutputFormats.Contains("riff_24k_pcm"), "Azure vendor exposes RIFF PCM output format");
+AssertTrue(azureVendor.Capabilities.SupportedOutputFormats.Contains("ogg_24k_opus"), "Azure vendor exposes OGG Opus output format");
 
 AssertTrue(huoshanVendor.Capabilities.SupportsEmotion, "Huoshan vendor declares emotion controls");
 AssertFalse(huoshanVendor.Capabilities.SupportsSsml, "Huoshan vendor does not declare generic SSML support");

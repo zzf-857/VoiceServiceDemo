@@ -163,7 +163,8 @@ public static class VendorRegistry
                 SupportsSsml = true,
                 SupportsStyle = true,
                 SupportsStyleDegree = true,
-                SupportedInputFormats = new() { TtsInputFormat.PlainText, TtsInputFormat.Ssml }
+                SupportedInputFormats = new() { TtsInputFormat.PlainText, TtsInputFormat.Ssml },
+                SupportedOutputFormats = new() { "mp3_16k", "mp3_24k", "riff_16k_pcm", "riff_24k_pcm", "raw_16k_pcm", "ogg_24k_opus" }
             },
             SpeedDef = new TtsParameterDef { Min = 0.1, Max = 3.0, Default = 1.0, Step = 0.1 },
             VolumeDef = new TtsParameterDef { Min = 0.0, Max = 100.0, Default = 100.0, Step = 1 }, // 以百分比映射
