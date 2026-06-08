@@ -556,7 +556,8 @@
     private bool SupportsEmotionControls => VendorCapabilities.SupportsEmotion;
     private bool SupportsInstructionsControls =>
         VendorCapabilities.SupportsInstructions &&
-        _selectedModelId.StartsWith("gpt-4o", StringComparison.OrdinalIgnoreCase);
+        (_selectedModelId.StartsWith("gpt-4o", StringComparison.OrdinalIgnoreCase) ||
+         _selectedModelId.StartsWith("qwen3-tts-instruct", StringComparison.OrdinalIgnoreCase));
     private bool SupportsExpressionControls =>
         VendorCapabilities.HasExpressionControls &&
         (SupportsSsmlControls || SupportsStyleControls || HasHuoshanEmotionControls || SupportsInstructionsControls);
@@ -566,6 +567,7 @@
         "google" => "Google 使用标准 SSML 控制停顿、读法和强调",
         "huoshan" => "火山使用音色支持的 emotion 参数控制语气",
         "openai" => "OpenAI 使用朗读指导控制语气和表达",
+        "aliyun" => "阿里云 Instruct 模型使用语气提示控制表达",
         _ => "该厂商支持额外表达控制"
     };
     private string InputFieldLabel => SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml ? "SSML 文本" : "测试文本";

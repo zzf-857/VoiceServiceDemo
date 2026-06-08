@@ -334,6 +334,39 @@ AssertTrue(aliyunVoices.Any(v => !string.IsNullOrWhiteSpace(v.Id) && !string.IsN
 
 Console.WriteLine("Aliyun provider boundary tests passed.");
 
+var aliyunInstructionJson = AliyunTtsProvider.BuildGenerateRequestJson(new TtsRequest
+{
+    VendorId = "aliyun",
+    ModelId = "qwen3-tts-instruct-flash-2026-01-26",
+    VoiceId = "Cherry",
+    Text = "欢迎使用 VoiceOps。",
+    Instructions = "用亲切的客服语气朗读。"
+});
+using (var aliyunInstructionDoc = JsonDocument.Parse(aliyunInstructionJson))
+{
+    AssertTrue(
+        TryGetNested(aliyunInstructionDoc.RootElement, out var instructions, "parameters", "instructions"),
+        "Aliyun instruct request includes parameters.instructions");
+    AssertEqual("用亲切的客服语气朗读。", instructions.GetString(), "Aliyun instruct request preserves instructions");
+}
+
+var aliyunLegacyJson = AliyunTtsProvider.BuildGenerateRequestJson(new TtsRequest
+{
+    VendorId = "aliyun",
+    ModelId = "cosyvoice-v1",
+    VoiceId = "longxiaochun",
+    Text = "欢迎使用 VoiceOps。",
+    Instructions = "用亲切的客服语气朗读。"
+});
+using (var aliyunLegacyDoc = JsonDocument.Parse(aliyunLegacyJson))
+{
+    AssertFalse(
+        TryGetNested(aliyunLegacyDoc.RootElement, out _, "parameters", "instructions"),
+        "Aliyun non-instruct request omits unsupported instructions");
+}
+
+Console.WriteLine("Aliyun provider request body tests passed.");
+
 var tencentProvider = new TencentTtsProvider(new HttpClient(), new SettingsService());
 var invalidTencent = await tencentProvider.TestConnectivityAsync("only-secret-id");
 AssertFalse(invalidTencent.Success, "Tencent provider rejects one-part credentials without network call");

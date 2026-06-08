@@ -102,6 +102,10 @@ public static class VendorRegistry
             IconName = "cloud",
             ApiBaseUrl = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2audio/generation",
             DocumentationUrl = "https://help.aliyun.com/zh/model-studio/developer-reference/cosyvoice",
+            Capabilities = new VendorCapabilities
+            {
+                SupportsInstructions = true
+            },
             SpeedDef = new TtsParameterDef { Min = 0.5, Max = 2.0, Default = 1.0, Step = 0.1 },
             VolumeDef = new TtsParameterDef { IsSupported = false }, // 暂时不支持直接调音量
             SupportsModelFetch = false,

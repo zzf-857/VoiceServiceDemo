@@ -92,34 +92,17 @@ public sealed class AliyunTtsProvider
 
         if (request.ModelId.StartsWith("qwen3-tts", StringComparison.OrdinalIgnoreCase))
         {
-            var body = new
-            {
-                model = request.ModelId,
-                input = new
-                {
-                    text = request.Text,
-                    voice = request.VoiceId
-                }
-            };
-
             httpRequest = new HttpRequestMessage(HttpMethod.Post,
                 "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation");
             httpRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
-            httpRequest.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+            httpRequest.Content = new StringContent(BuildGenerateRequestJson(request), Encoding.UTF8, "application/json");
         }
         else
         {
-            var body = new
-            {
-                model = request.ModelId,
-                input = new { text = request.Text },
-                parameters = new { voice = request.VoiceId }
-            };
-
             httpRequest = new HttpRequestMessage(HttpMethod.Post,
                 "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2audio/generation");
             httpRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
-            httpRequest.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+            httpRequest.Content = new StringContent(BuildGenerateRequestJson(request), Encoding.UTF8, "application/json");
         }
 
         var response = await _httpClient.SendAsync(httpRequest);
@@ -155,6 +138,44 @@ public sealed class AliyunTtsProvider
 
         return await SaveAudioResponseAsync(response, request);
     }
+
+    public static string BuildGenerateRequestJson(TtsRequest request)
+    {
+        if (request.ModelId.StartsWith("qwen3-tts", StringComparison.OrdinalIgnoreCase))
+        {
+            var body = new Dictionary<string, object?>
+            {
+                ["model"] = request.ModelId,
+                ["input"] = new
+                {
+                    text = request.Text,
+                    voice = request.VoiceId
+                }
+            };
+
+            if (SupportsInstructions(request.ModelId) && !string.IsNullOrWhiteSpace(request.Instructions))
+            {
+                body["parameters"] = new
+                {
+                    instructions = request.Instructions.Trim()
+                };
+            }
+
+            return JsonSerializer.Serialize(body);
+        }
+
+        var legacyBody = new
+        {
+            model = request.ModelId,
+            input = new { text = request.Text },
+            parameters = new { voice = request.VoiceId }
+        };
+
+        return JsonSerializer.Serialize(legacyBody);
+    }
+
+    public static bool SupportsInstructions(string modelId) =>
+        modelId.StartsWith("qwen3-tts-instruct", StringComparison.OrdinalIgnoreCase);
 
     private void ParseVoiceConfig(JsonElement cfg, List<VoiceOption> options)
     {
