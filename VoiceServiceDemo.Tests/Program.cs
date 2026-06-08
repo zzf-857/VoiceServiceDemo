@@ -387,6 +387,7 @@ using (var tencentBasicDoc = JsonDocument.Parse(tencentBasicJson))
     AssertEqual("你好，腾讯。", tencentBasicDoc.RootElement.GetProperty("Text").GetString(), "Tencent request preserves text");
     AssertEqual("session-123", tencentBasicDoc.RootElement.GetProperty("SessionId").GetString(), "Tencent request preserves supplied session id");
     AssertEqual(502001L, tencentBasicDoc.RootElement.GetProperty("VoiceType").GetInt64(), "Tencent request sends numeric voice type");
+    AssertEqual("mp3", tencentBasicDoc.RootElement.GetProperty("Codec").GetString(), "Tencent request defaults to mp3 codec");
     AssertFalse(tencentBasicDoc.RootElement.TryGetProperty("EmotionCategory", out _), "Tencent basic request omits emotion category");
     AssertFalse(tencentBasicDoc.RootElement.TryGetProperty("EmotionIntensity", out _), "Tencent basic request omits emotion intensity");
 }
@@ -423,6 +424,34 @@ using (var tencentClampedEmotionDoc = JsonDocument.Parse(tencentClampedEmotionJs
 AssertTrue(TencentEmotionPolicy.GetOptions().Any(e => e.Id == "jieshuo" && e.Name == "解说"), "Tencent emotion policy exposes official narration category");
 AssertEqual("", TencentEmotionPolicy.ToRequestEmotion("unsupported"), "Tencent emotion policy omits unsupported categories");
 AssertEqual("call", TencentEmotionPolicy.ToRequestEmotion(" call "), "Tencent emotion policy trims official categories");
+
+var tencentPcmJson = TencentTtsProvider.BuildTextToVoiceRequestJson(new TtsRequest
+{
+    VendorId = "tencent",
+    VoiceId = "502001",
+    Text = "输出 PCM。",
+    OutputFormat = "pcm"
+}, "codec-session");
+using (var tencentPcmDoc = JsonDocument.Parse(tencentPcmJson))
+{
+    AssertEqual("pcm", tencentPcmDoc.RootElement.GetProperty("Codec").GetString(), "Tencent request sends selected codec");
+}
+
+var tencentInvalidCodecJson = TencentTtsProvider.BuildTextToVoiceRequestJson(new TtsRequest
+{
+    VendorId = "tencent",
+    VoiceId = "502001",
+    Text = "格式回落。",
+    OutputFormat = "unsupported"
+}, "codec-session");
+using (var tencentInvalidCodecDoc = JsonDocument.Parse(tencentInvalidCodecJson))
+{
+    AssertEqual("mp3", tencentInvalidCodecDoc.RootElement.GetProperty("Codec").GetString(), "Tencent request falls back to mp3 for unsupported codec");
+}
+
+AssertEqual(".wav", TencentTtsProvider.GetOutputFormatExtension("wav"), "Tencent provider maps WAV codec to file extension");
+AssertEqual(".pcm", TencentTtsProvider.GetOutputFormatExtension("pcm"), "Tencent provider maps PCM codec to file extension");
+AssertEqual(".mp3", TencentTtsProvider.GetOutputFormatExtension("unknown"), "Tencent provider falls back to mp3 extension");
 
 Console.WriteLine("Tencent emotion request body tests passed.");
 
@@ -635,6 +664,8 @@ AssertTrue(openAiVendor.Capabilities.SupportedOutputFormats.Contains("pcm"), "Op
 
 var tencentVendor = VendorRegistry.GetById("tencent") ?? throw new Exception("Tencent vendor config is missing");
 AssertTrue(tencentVendor.Capabilities.SupportsEmotion, "Tencent vendor declares emotion controls");
+AssertTrue(tencentVendor.Capabilities.SupportedOutputFormats.Contains("wav"), "Tencent vendor exposes WAV output format");
+AssertTrue(tencentVendor.Capabilities.SupportedOutputFormats.Contains("pcm"), "Tencent vendor exposes PCM output format");
 
 Console.WriteLine("Vendor capabilities registry tests passed.");
 

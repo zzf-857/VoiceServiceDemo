@@ -195,7 +195,7 @@ public sealed class TencentTtsProvider
             ["Text"] = request.Text,
             ["SessionId"] = sessionId,
             ["VoiceType"] = long.Parse(request.VoiceId),
-            ["Codec"] = "mp3",
+            ["Codec"] = NormalizeCodec(request.OutputFormat),
             ["Speed"] = (int)Math.Round(request.Speed),
             ["Volume"] = (int)Math.Round(request.Volume)
         };
@@ -212,7 +212,7 @@ public sealed class TencentTtsProvider
 
     private async Task<TtsResult> SaveAudioBytesAsync(byte[] audioBytes, TtsRequest request)
     {
-        var filePath = GetOutputFilePath();
+        var filePath = GetOutputFilePath(request.OutputFormat);
         await File.WriteAllBytesAsync(filePath, audioBytes);
 
         var vendor = VendorRegistry.GetById("tencent");
@@ -227,11 +227,20 @@ public sealed class TencentTtsProvider
         };
     }
 
-    private string GetOutputFilePath()
+    public static string GetOutputFormatExtension(string outputFormat) =>
+        "." + NormalizeCodec(outputFormat);
+
+    private static string NormalizeCodec(string outputFormat)
+    {
+        var normalized = (outputFormat ?? "").Trim().ToLowerInvariant();
+        return normalized is "mp3" or "wav" or "pcm" ? normalized : "mp3";
+    }
+
+    private string GetOutputFilePath(string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
         Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"tencent_{DateTime.Now:yyyyMMdd_HHmmss}.mp3");
+        return Path.Combine(dir, $"tencent_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(outputFormat)}");
     }
 
     private static string? TryGetStr(JsonElement elem, params string[] names)

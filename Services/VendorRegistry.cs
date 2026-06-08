@@ -77,7 +77,8 @@ public static class VendorRegistry
             DocumentationUrl = "https://cloud.tencent.com/document/product/1073",
             Capabilities = new VendorCapabilities
             {
-                SupportsEmotion = true
+                SupportsEmotion = true,
+                SupportedOutputFormats = new() { "mp3", "wav", "pcm" }
             },
             SpeedDef = new TtsParameterDef { Min = -2, Max = 2, Default = 0, Step = 1 }, // 腾讯音量语速都采用整数范围
             VolumeDef = new TtsParameterDef { Min = 0, Max = 10, Default = 0, Step = 1 },
