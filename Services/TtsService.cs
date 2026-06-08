@@ -18,6 +18,7 @@ public class TtsService
     private readonly AliyunTtsProvider _aliyunProvider;
     private readonly HuoshanTtsProvider _huoshanProvider;
     private readonly TencentTtsProvider _tencentProvider;
+    private readonly GoogleTtsProvider _googleProvider;
 
     public TtsService(SettingsService settingsService)
     {
@@ -26,6 +27,7 @@ public class TtsService
         _aliyunProvider = new AliyunTtsProvider(_httpClient, _settingsService);
         _huoshanProvider = new HuoshanTtsProvider(_httpClient, _settingsService);
         _tencentProvider = new TencentTtsProvider(_httpClient, _settingsService);
+        _googleProvider = new GoogleTtsProvider(_httpClient, _settingsService);
     }
 
     /// <summary>
@@ -47,7 +49,7 @@ public class TtsService
                 "tencent" => await _tencentProvider.TestConnectivityAsync(apiKey),
                 "baidu" => await TestBaiduAsync(apiKey),
                 "azure" => await TestAzureAsync(apiKey),
-                "google" => await TestGoogleAsync(apiKey),
+                "google" => await _googleProvider.TestConnectivityAsync(apiKey),
                 _ => (false, "该厂商暂不支持连通性测试。")
             };
         }
@@ -116,15 +118,6 @@ public class TtsService
             : (false, $"鉴权失败 ({resp.StatusCode})");
     }
 
-    private async Task<(bool, string)> TestGoogleAsync(string apiKey)
-    {
-        var url = $"https://texttospeech.googleapis.com/v1/voices?key={apiKey}";
-        var resp = await _httpClient.GetAsync(url);
-        return resp.IsSuccessStatusCode
-            ? (true, "Google 连接成功 ✓")
-            : (false, $"鉴权失败 ({resp.StatusCode})");
-    }
-
     /// <summary>
     /// 通用语音合成入口
     /// </summary>
@@ -148,7 +141,7 @@ public class TtsService
                 "tencent" => await _tencentProvider.GenerateAsync(request, apiKey),
                 "baidu" => await GenerateBaiduAsync(request, apiKey),
                 "azure" => await GenerateAzureAsync(request, apiKey),
-                "google" => await GenerateGoogleAsync(request, apiKey),
+                "google" => await _googleProvider.GenerateAsync(request, apiKey),
                 _ => new TtsResult { Success = false, ErrorMessage = $"该厂商 ({vendor.Name}) 暂未实现联调接口。" }
             };
         }
@@ -238,49 +231,6 @@ public class TtsService
         }
 
         return await SaveAudioResponse(response, request, "azure");
-    }
-
-    // ========== Google TTS ==========
-    private async Task<TtsResult> GenerateGoogleAsync(TtsRequest request, string apiKey)
-    {
-        var body = new
-        {
-            input = new { text = request.Text },
-            voice = new { languageCode = "cmn-CN", name = request.VoiceId },
-            audioConfig = new { audioEncoding = "MP3", speakingRate = request.Speed, volumeGainDb = request.Volume }
-        };
-
-        var url = $"https://texttospeech.googleapis.com/v1/text:synthesize?key={apiKey}";
-        var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
-        httpRequest.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-
-        var response = await _httpClient.SendAsync(httpRequest);
-        var respJson = await response.Content.ReadAsStringAsync();
-
-        if (!response.IsSuccessStatusCode)
-            return new TtsResult { Success = false, ErrorMessage = $"Google API 错误 ({response.StatusCode}): {respJson}" };
-
-        // Google 返回 base64
-        var doc = JsonDocument.Parse(respJson);
-        if (doc.RootElement.TryGetProperty("audioContent", out var audioBase64))
-        {
-            var audioBytes = Convert.FromBase64String(audioBase64.GetString()!);
-            var filePath = GetOutputFilePath(request.VendorId);
-            await File.WriteAllBytesAsync(filePath, audioBytes);
-
-            var vendor = VendorRegistry.GetById(request.VendorId);
-            return new TtsResult
-            {
-                Success = true,
-                FilePath = filePath,
-                VendorName = vendor?.Name ?? "",
-                ModelName = request.ModelId,
-                VoiceName = request.VoiceId,
-                Text = request.Text
-            };
-        }
-
-        return new TtsResult { Success = false, ErrorMessage = "Google 返回结果无效: " + respJson };
     }
 
     // ========== 通用保存 ==========

@@ -305,6 +305,49 @@ AssertTrue(invalidTencent.Message.Contains("SecretId|SecretKey"), "Tencent provi
 
 Console.WriteLine("Tencent provider boundary tests passed.");
 
+var googlePlainJson = GoogleTtsProvider.BuildSynthesizeRequestJson(new TtsRequest
+{
+    VendorId = "google",
+    VoiceId = "cmn-CN-Wavenet-A",
+    Text = "你好，Google。",
+    Speed = 1.1,
+    Volume = 2,
+    InputFormat = TtsInputFormat.PlainText
+});
+using (var googlePlainDoc = JsonDocument.Parse(googlePlainJson))
+{
+    AssertTrue(
+        TryGetNested(googlePlainDoc.RootElement, out var googleTextInput, "input", "text"),
+        "Google plain text request sends input.text");
+    AssertEqual("你好，Google。", googleTextInput.GetString(), "Google plain text request preserves text");
+    AssertFalse(
+        TryGetNested(googlePlainDoc.RootElement, out _, "input", "ssml"),
+        "Google plain text request does not send input.ssml");
+}
+
+var googleSsmlJson = GoogleTtsProvider.BuildSynthesizeRequestJson(new TtsRequest
+{
+    VendorId = "google",
+    VoiceId = "en-US-Wavenet-D",
+    Text = "ignored",
+    Speed = 1,
+    Volume = 0,
+    InputFormat = TtsInputFormat.Ssml,
+    SsmlText = "<speak>Hello from Google.</speak>"
+});
+using (var googleSsmlDoc = JsonDocument.Parse(googleSsmlJson))
+{
+    AssertTrue(
+        TryGetNested(googleSsmlDoc.RootElement, out var googleSsmlInput, "input", "ssml"),
+        "Google SSML request sends input.ssml");
+    AssertEqual("<speak>Hello from Google.</speak>", googleSsmlInput.GetString(), "Google SSML request preserves SSML markup");
+    AssertFalse(
+        TryGetNested(googleSsmlDoc.RootElement, out _, "input", "text"),
+        "Google SSML request does not send input.text");
+}
+
+Console.WriteLine("Google provider request body tests passed.");
+
 var huoshanVendor = VendorRegistry.GetById("huoshan") ?? throw new Exception("Huoshan vendor config is missing");
 AssertTrue(
     huoshanVendor.ImportantLinks.Any(link =>
@@ -333,6 +376,10 @@ AssertTrue(azureVendor.Capabilities.SupportedInputFormats.Contains(TtsInputForma
 AssertTrue(huoshanVendor.Capabilities.SupportsEmotion, "Huoshan vendor declares emotion controls");
 AssertFalse(huoshanVendor.Capabilities.SupportsSsml, "Huoshan vendor does not declare generic SSML support");
 
+var googleVendor = VendorRegistry.GetById("google") ?? throw new Exception("Google vendor config is missing");
+AssertTrue(googleVendor.Capabilities.SupportsSsml, "Google vendor declares SSML support");
+AssertTrue(googleVendor.Capabilities.SupportedInputFormats.Contains(TtsInputFormat.Ssml), "Google vendor exposes SSML as a supported input format");
+
 var openAiVendor = VendorRegistry.GetById("openai") ?? throw new Exception("OpenAI vendor config is missing");
 AssertFalse(openAiVendor.Capabilities.SupportsInstructions, "OpenAI instructions remain disabled until the provider maps them");
 
@@ -352,6 +399,7 @@ var workspaceMarkup = await File.ReadAllTextAsync(workspaceRazorPath);
 AssertTrue(workspaceMarkup.Contains("_vendor.ImportantLinks"), "Workspace renders links from the shared vendor important link registry");
 AssertTrue(workspaceMarkup.Contains("VendorCapabilities"), "Workspace reads the shared vendor capabilities");
 AssertFalse(workspaceMarkup.Contains("private bool SupportsExpressionControls => IsAzure || IsHuoshan"), "Workspace expression panel is not gated by a hard-coded vendor pair");
+AssertTrue(workspaceMarkup.Contains("Google 使用标准 SSML"), "Workspace gives Google-specific SSML guidance");
 
 var appCssPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "css", "app.css");
 var appCss = await File.ReadAllTextAsync(appCssPath);

@@ -348,7 +348,7 @@
 
             <div class="form-group">
                 <label class="field-caption">@InputFieldLabel</label>
-                @if (IsAzure && _inputFormat == TtsInputFormat.Ssml)
+                @if (SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml)
                 {
                     <textarea class="text-area generation-text" placeholder="输入完整 SSML，例如 <speak>...</speak>" @bind="_ssmlText"></textarea>
                 }
@@ -553,9 +553,13 @@
     private bool SupportsExpressionControls =>
         VendorCapabilities.HasExpressionControls &&
         (SupportsSsmlControls || SupportsStyleControls || HasHuoshanEmotionControls);
-    private string ExpressionHint => SupportsSsmlControls || SupportsStyleControls
-        ? "Azure 使用 SSML 或 speaking style 控制语气"
-        : "火山使用音色支持的 emotion 参数控制语气";
+    private string ExpressionHint => _vendor?.Id switch
+    {
+        "azure" => "Azure 使用 SSML 或 speaking style 控制语气",
+        "google" => "Google 使用标准 SSML 控制停顿、读法和强调",
+        "huoshan" => "火山使用音色支持的 emotion 参数控制语气",
+        _ => "该厂商支持额外表达控制"
+    };
     private string InputFieldLabel => SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml ? "SSML 文本" : "测试文本";
     private string CurrentInputText => SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml ? _ssmlText : _inputText;
     private List<TtsExpressionOption> HuoshanEmotionOptions => _selectedVoice == null ? new() : GetHuoshanEmotionOptions(_selectedVoice).ToList();
@@ -589,14 +593,16 @@
     {
         _inputFormat = inputFormat;
         if (_inputFormat == TtsInputFormat.Ssml && string.IsNullOrWhiteSpace(_ssmlText))
-            _ssmlText = BuildAzureSsmlStarter();
+            _ssmlText = BuildSsmlStarter();
     }
 
-    private string BuildAzureSsmlStarter()
+    private string BuildSsmlStarter()
     {
         var voice = string.IsNullOrWhiteSpace(_selectedVoiceId) ? "zh-CN-XiaoxiaoNeural" : _selectedVoiceId;
         var text = string.IsNullOrWhiteSpace(_inputText) ? "你好，欢迎使用 VoiceOps。" : _inputText;
-        return $"""<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="zh-CN"><voice name="{voice}">{text}</voice></speak>""";
+        return IsAzure
+            ? $"""<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="zh-CN"><voice name="{voice}">{text}</voice></speak>"""
+            : $"""<speak>{text}</speak>""";
     }
 
     private string _playingDemoVoiceId = "";
@@ -1144,7 +1150,7 @@
             if (_isGenerating) return "正在生成语音，请稍候";
             if (_vendor == null) return "当前厂商不可用";
             if (_selectedVoice == null) return "请先选择一个音色";
-            if (string.IsNullOrWhiteSpace(CurrentInputText)) return IsAzure && _inputFormat == TtsInputFormat.Ssml ? "请输入完整 SSML 文本" : "请输入要合成的文本";
+            if (string.IsNullOrWhiteSpace(CurrentInputText)) return SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml ? "请输入完整 SSML 文本" : "请输入要合成的文本";
             return $"准备使用 {_selectedVoice.Name} 生成语音";
         }
     }

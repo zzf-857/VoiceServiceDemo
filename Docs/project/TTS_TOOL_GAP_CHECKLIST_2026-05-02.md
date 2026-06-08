@@ -20,6 +20,11 @@
   - 已完成：Workspace 的表达面板入口、SSML 文本判断、生成请求中的 style/emotion/SSML 字段改为读取能力对象，减少继续新增厂商时的硬编码入口。
   - 已验证：新增自检覆盖 Azure/火山/OpenAI 能力声明，以及 Workspace 不再用固定 `IsAzure || IsHuoshan` 组合控制表达面板。
   - 关联缺口：推进 P0-01 和 P1-07，但能力模型仍需继续扩展到格式、采样率、长文本、instructions、Google SSML 等能力。
+- [x] **接入 Google SSML 生成交互**
+  - 已完成：Google 注册表声明 SSML 输入能力，Workspace 会为 Google 显示普通文本/SSML 切换和 Google 专属提示。
+  - 已完成：新增 `GoogleTtsProvider`，普通文本请求发送 `input.text`，SSML 模式发送 `input.ssml`，并接回桌面端 `TtsService` 分发。
+  - 已验证：新增自检覆盖 Google plain text / SSML 请求体二选一，以及 Google SSML 能力声明；解决方案构建通过。
+  - 关联缺口：完成 P1-13 的基础生成接入，并推进 P2-11 的供应商拆分；Google 在线音色刷新仍归 P2-14。
 
 ## P0：核心生成链路
 
@@ -130,10 +135,10 @@
   - 建议：核对腾讯当前 API 参数后接入风格、情感或场景参数。
   - 验收：腾讯工作区出现经过验证的表达控件，而不是占位 UI。
 
-- [ ] **P1-13 Google SSML 未接入**
-  - 现状：Google 只使用 plain text。
-  - 影响：Google TTS 的 SSML 能力不可用。
-  - 建议：支持 Google `input.ssml`，并区分 Azure SSML 标签兼容性。
+- [x] **P1-13 Google SSML 未接入**
+  - 现状：Google 已支持普通文本/SSML 切换；SSML 模式下 provider 发送 `input.ssml`，普通文本模式下继续发送 `input.text`。
+  - 已修正：Workspace 复用能力模型展示 Google SSML 交互，并使用不含 Azure `mstts` 命名空间的基础 `<speak>` 模板。
+  - 后续影响：Google SSML 语法校验、标签模板和更细的兼容性提示可继续并入 P0-02/P1-08 的校验与模板体系。
   - 验收：Google 可在 SSML 模式下生成 `<speak>` 输入。
 
 - [ ] **P1-14 OpenAI 指令式语气未接入**

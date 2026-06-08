@@ -179,6 +179,11 @@ public static class VendorRegistry
             IconName = "globe",
             ApiBaseUrl = "https://texttospeech.googleapis.com/v1/text:synthesize",
             DocumentationUrl = "https://cloud.google.com/text-to-speech/docs",
+            Capabilities = new VendorCapabilities
+            {
+                SupportsSsml = true,
+                SupportedInputFormats = new() { TtsInputFormat.PlainText, TtsInputFormat.Ssml }
+            },
             SpeedDef = new TtsParameterDef { Min = 0.25, Max = 4.0, Default = 1.0, Step = 0.05 },
             VolumeDef = new TtsParameterDef { Min = -96, Max = 16, Default = 0, Step = 1 }, // gain DB
             SupportsModelFetch = false,
