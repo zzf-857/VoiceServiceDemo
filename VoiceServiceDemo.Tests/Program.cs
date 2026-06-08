@@ -374,6 +374,58 @@ AssertTrue(invalidTencent.Message.Contains("SecretId|SecretKey"), "Tencent provi
 
 Console.WriteLine("Tencent provider boundary tests passed.");
 
+var tencentBasicJson = TencentTtsProvider.BuildTextToVoiceRequestJson(new TtsRequest
+{
+    VendorId = "tencent",
+    VoiceId = "502001",
+    Text = "你好，腾讯。",
+    Speed = 1.25,
+    Volume = 2
+}, "session-123");
+using (var tencentBasicDoc = JsonDocument.Parse(tencentBasicJson))
+{
+    AssertEqual("你好，腾讯。", tencentBasicDoc.RootElement.GetProperty("Text").GetString(), "Tencent request preserves text");
+    AssertEqual("session-123", tencentBasicDoc.RootElement.GetProperty("SessionId").GetString(), "Tencent request preserves supplied session id");
+    AssertEqual(502001L, tencentBasicDoc.RootElement.GetProperty("VoiceType").GetInt64(), "Tencent request sends numeric voice type");
+    AssertFalse(tencentBasicDoc.RootElement.TryGetProperty("EmotionCategory", out _), "Tencent basic request omits emotion category");
+    AssertFalse(tencentBasicDoc.RootElement.TryGetProperty("EmotionIntensity", out _), "Tencent basic request omits emotion intensity");
+}
+
+var tencentEmotionJson = TencentTtsProvider.BuildTextToVoiceRequestJson(new TtsRequest
+{
+    VendorId = "tencent",
+    VoiceId = "502001",
+    Text = "今天真开心。",
+    Speed = 0,
+    Volume = 0,
+    Emotion = " happy ",
+    EmotionIntensity = 180
+}, "emotion-session");
+using (var tencentEmotionDoc = JsonDocument.Parse(tencentEmotionJson))
+{
+    AssertEqual("happy", tencentEmotionDoc.RootElement.GetProperty("EmotionCategory").GetString(), "Tencent request sends selected emotion category");
+    AssertEqual(180, tencentEmotionDoc.RootElement.GetProperty("EmotionIntensity").GetInt32(), "Tencent request sends selected emotion intensity");
+}
+
+var tencentClampedEmotionJson = TencentTtsProvider.BuildTextToVoiceRequestJson(new TtsRequest
+{
+    VendorId = "tencent",
+    VoiceId = "502001",
+    Text = "强度需要夹取。",
+    Emotion = "sad",
+    EmotionIntensity = 260
+}, "emotion-session");
+using (var tencentClampedEmotionDoc = JsonDocument.Parse(tencentClampedEmotionJson))
+{
+    AssertEqual(200, tencentClampedEmotionDoc.RootElement.GetProperty("EmotionIntensity").GetInt32(), "Tencent request clamps emotion intensity to official max");
+}
+
+AssertTrue(TencentEmotionPolicy.GetOptions().Any(e => e.Id == "jieshuo" && e.Name == "解说"), "Tencent emotion policy exposes official narration category");
+AssertEqual("", TencentEmotionPolicy.ToRequestEmotion("unsupported"), "Tencent emotion policy omits unsupported categories");
+AssertEqual("call", TencentEmotionPolicy.ToRequestEmotion(" call "), "Tencent emotion policy trims official categories");
+
+Console.WriteLine("Tencent emotion request body tests passed.");
+
 var baiduProvider = new BaiduTtsProvider(new HttpClient(), new SettingsService());
 var invalidBaidu = await baiduProvider.TestConnectivityAsync("only-api-key");
 AssertFalse(invalidBaidu.Success, "Baidu provider rejects one-part credentials without network call");
@@ -535,6 +587,9 @@ AssertTrue(googleVendor.Capabilities.SupportedInputFormats.Contains(TtsInputForm
 var openAiVendor = VendorRegistry.GetById("openai") ?? throw new Exception("OpenAI vendor config is missing");
 AssertTrue(openAiVendor.Capabilities.SupportsInstructions, "OpenAI vendor declares reading instructions support");
 
+var tencentVendor = VendorRegistry.GetById("tencent") ?? throw new Exception("Tencent vendor config is missing");
+AssertTrue(tencentVendor.Capabilities.SupportsEmotion, "Tencent vendor declares emotion controls");
+
 Console.WriteLine("Vendor capabilities registry tests passed.");
 
 var settingsRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Settings.razor");
@@ -553,6 +608,9 @@ AssertTrue(workspaceMarkup.Contains("VendorCapabilities"), "Workspace reads the 
 AssertFalse(workspaceMarkup.Contains("private bool SupportsExpressionControls => IsAzure || IsHuoshan"), "Workspace expression panel is not gated by a hard-coded vendor pair");
 AssertTrue(workspaceMarkup.Contains("Google 使用标准 SSML"), "Workspace gives Google-specific SSML guidance");
 AssertTrue(workspaceMarkup.Contains("OpenAI 使用朗读指导"), "Workspace gives OpenAI-specific instruction guidance");
+AssertTrue(workspaceMarkup.Contains("TencentEmotionOptions"), "Workspace renders Tencent emotion options");
+AssertTrue(workspaceMarkup.Contains("EmotionIntensity"), "Workspace sends Tencent emotion intensity");
+AssertTrue(workspaceMarkup.Contains("腾讯使用 EmotionCategory"), "Workspace gives Tencent-specific emotion guidance");
 
 var appCssPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "css", "app.css");
 var appCss = await File.ReadAllTextAsync(appCssPath);

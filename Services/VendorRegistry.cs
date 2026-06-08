@@ -75,6 +75,10 @@ public static class VendorRegistry
             IconName = "message-square",
             ApiBaseUrl = "https://tts.tencentcloudapi.com",
             DocumentationUrl = "https://cloud.tencent.com/document/product/1073",
+            Capabilities = new VendorCapabilities
+            {
+                SupportsEmotion = true
+            },
             SpeedDef = new TtsParameterDef { Min = -2, Max = 2, Default = 0, Step = 1 }, // 腾讯音量语速都采用整数范围
             VolumeDef = new TtsParameterDef { Min = 0, Max = 10, Default = 0, Step = 1 },
             SupportsModelFetch = false,

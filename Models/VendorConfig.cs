@@ -144,6 +144,7 @@ public class TtsRequest
     public string Style { get; set; } = "";
     public double StyleDegree { get; set; } = 1.0;
     public string Emotion { get; set; } = "";
+    public int EmotionIntensity { get; set; } = 100;
     public string ResourceId { get; set; } = "";
     public string Role { get; set; } = "";
     public string Instructions { get; set; } = "";

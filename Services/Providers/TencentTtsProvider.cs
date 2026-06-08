@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using VoiceServiceDemo.Helpers;
 using VoiceServiceDemo.Models;
+using VoiceServiceDemo.Services;
 
 namespace VoiceServiceDemo.Services.Providers;
 
@@ -151,17 +152,7 @@ public sealed class TencentTtsProvider
         var secretId = keys.Length >= 3 ? keys[1] : keys[0];
         var secretKey = keys.Length >= 3 ? keys[2] : keys[1];
 
-        var bodyObj = new
-        {
-            Text = request.Text,
-            SessionId = Guid.NewGuid().ToString(),
-            VoiceType = long.Parse(request.VoiceId),
-            Codec = "mp3",
-            Speed = (int)Math.Round(request.Speed),
-            Volume = (int)Math.Round(request.Volume)
-        };
-
-        var body = JsonSerializer.Serialize(bodyObj);
+        var body = BuildTextToVoiceRequestJson(request, Guid.NewGuid().ToString());
         var bodyBytes = Encoding.UTF8.GetBytes(body);
 
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://tts.tencentcloudapi.com");
@@ -195,6 +186,28 @@ public sealed class TencentTtsProvider
         }
 
         return new TtsResult { Success = false, ErrorMessage = "腾讯云返回结果无法解析: " + respJson };
+    }
+
+    public static string BuildTextToVoiceRequestJson(TtsRequest request, string sessionId)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["Text"] = request.Text,
+            ["SessionId"] = sessionId,
+            ["VoiceType"] = long.Parse(request.VoiceId),
+            ["Codec"] = "mp3",
+            ["Speed"] = (int)Math.Round(request.Speed),
+            ["Volume"] = (int)Math.Round(request.Volume)
+        };
+
+        var emotion = TencentEmotionPolicy.ToRequestEmotion(request.Emotion);
+        if (!string.IsNullOrWhiteSpace(emotion))
+        {
+            body["EmotionCategory"] = emotion;
+            body["EmotionIntensity"] = TencentEmotionPolicy.ClampIntensity(request.EmotionIntensity);
+        }
+
+        return JsonSerializer.Serialize(body);
     }
 
     private async Task<TtsResult> SaveAudioBytesAsync(byte[] audioBytes, TtsRequest request)

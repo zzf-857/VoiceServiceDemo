@@ -310,6 +310,36 @@
                         </div>
                     }
 
+                    @if (SupportsEmotionControls && HasTencentEmotionControls)
+                    {
+                        <div class="emotion-row">
+                            <span>语气</span>
+                            @foreach (var emotion in TencentEmotionOptions)
+                            {
+                                <button class="@($"filter-chip {(_selectedEmotion == emotion.Id ? "active" : "")}")"
+                                        @onclick="@(() => _selectedEmotion = emotion.Id)">
+                                    @emotion.Name
+                                </button>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(TencentEmotionPolicy.ToRequestEmotion(_selectedEmotion)))
+                        {
+                            <div class="slider-group compact-slider">
+                                <div class="slider-header">
+                                    <span class="slider-label">情感强度</span>
+                                    <span class="slider-value">@_emotionIntensity</span>
+                                </div>
+                                <input type="range" class="win-slider"
+                                       min="@TencentEmotionPolicy.MinIntensity"
+                                       max="@TencentEmotionPolicy.MaxIntensity"
+                                       step="1"
+                                       @bind="_emotionIntensity"
+                                       @bind:event="oninput" />
+                            </div>
+                        }
+                    }
+
                     @if (SupportsInstructionsControls)
                     {
                         <div class="form-group expression-instructions">
@@ -498,6 +528,7 @@
     private string _filterGender = "";
     private string _selectedVoiceName = "";
     private string _selectedEmotion = "general";
+    private int _emotionIntensity = TencentEmotionPolicy.DefaultIntensity;
     private string _selectedStyle = "";
     private string _instructions = "";
     private TtsInputFormat _inputFormat = TtsInputFormat.PlainText;
@@ -533,14 +564,25 @@
     {
         _selectedVoiceId = v.Id;
         _selectedVoiceName = v.Name;
-        var resourceId = HuoshanEmotionPolicy.GetResourceId(v);
-        if (!string.IsNullOrWhiteSpace(resourceId) && _vendor?.DefaultModels.Any(m => m.Id == resourceId) == true)
-            _selectedModelId = resourceId;
+        if (IsHuoshan)
+        {
+            var resourceId = HuoshanEmotionPolicy.GetResourceId(v);
+            if (!string.IsNullOrWhiteSpace(resourceId) && _vendor?.DefaultModels.Any(m => m.Id == resourceId) == true)
+                _selectedModelId = resourceId;
 
-        // 默认选择 general 或第一个情感
-        var emotionOptions = GetHuoshanEmotionOptions(v).ToList();
-        _selectedEmotion = emotionOptions.Any(e => e.Id == "neutral") ? "neutral"
-                         : emotionOptions.FirstOrDefault()?.Id ?? "";
+            var emotionOptions = GetHuoshanEmotionOptions(v).ToList();
+            _selectedEmotion = emotionOptions.Any(e => e.Id == "neutral") ? "neutral"
+                             : emotionOptions.FirstOrDefault()?.Id ?? "";
+        }
+        else if (IsTencent)
+        {
+            _selectedEmotion = "";
+            _emotionIntensity = TencentEmotionPolicy.DefaultIntensity;
+        }
+        else
+        {
+            _selectedEmotion = "";
+        }
 
         if (IsAzure && !AzureStyleOptions.Any(style => style.Id == _selectedStyle))
             _selectedStyle = "";
@@ -549,6 +591,7 @@
     private IReadOnlyList<TtsExpressionOption> AzureStyleOptions => AzureStylePolicy.GetOptions(_selectedVoice);
     private bool IsAzure => _vendor?.Id == "azure";
     private bool IsHuoshan => _vendor?.Id == "huoshan";
+    private bool IsTencent => _vendor?.Id == "tencent";
     private VendorCapabilities VendorCapabilities => _vendor?.Capabilities ?? new();
     private bool SupportsSsmlControls => VendorCapabilities.SupportsSsml;
     private bool SupportsStyleControls => VendorCapabilities.SupportsStyle;
@@ -560,12 +603,13 @@
          _selectedModelId.StartsWith("qwen3-tts-instruct", StringComparison.OrdinalIgnoreCase));
     private bool SupportsExpressionControls =>
         VendorCapabilities.HasExpressionControls &&
-        (SupportsSsmlControls || SupportsStyleControls || HasHuoshanEmotionControls || SupportsInstructionsControls);
+        (SupportsSsmlControls || SupportsStyleControls || HasHuoshanEmotionControls || HasTencentEmotionControls || SupportsInstructionsControls);
     private string ExpressionHint => _vendor?.Id switch
     {
         "azure" => "Azure 使用 SSML 或 speaking style 控制语气",
         "google" => "Google 使用标准 SSML 控制停顿、读法和强调",
         "huoshan" => "火山使用音色支持的 emotion 参数控制语气",
+        "tencent" => "腾讯使用 EmotionCategory 和 EmotionIntensity 控制多情感音色",
         "openai" => "OpenAI 使用朗读指导控制语气和表达",
         "aliyun" => "阿里云 Instruct 模型使用语气提示控制表达",
         _ => "该厂商支持额外表达控制"
@@ -574,6 +618,8 @@
     private string CurrentInputText => SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml ? _ssmlText : _inputText;
     private List<TtsExpressionOption> HuoshanEmotionOptions => _selectedVoice == null ? new() : GetHuoshanEmotionOptions(_selectedVoice).ToList();
     private bool HasHuoshanEmotionControls => _selectedVoice != null && HuoshanEmotionPolicy.HasSelectableEmotionControls(_selectedVoice);
+    private IReadOnlyList<TtsExpressionOption> TencentEmotionOptions => TencentEmotionPolicy.GetOptions();
+    private bool HasTencentEmotionControls => IsTencent;
 
     private IEnumerable<TtsExpressionOption> GetHuoshanEmotionOptions(VoiceOption voice)
     {
@@ -581,6 +627,20 @@
             return Enumerable.Empty<TtsExpressionOption>();
 
         return HuoshanEmotionPolicy.GetOptions(voice);
+    }
+
+    private string GetRequestEmotion()
+    {
+        if (!SupportsEmotionControls)
+            return "";
+
+        if (IsHuoshan)
+            return HuoshanEmotionPolicy.ToRequestEmotion(_selectedEmotion);
+
+        if (IsTencent)
+            return TencentEmotionPolicy.ToRequestEmotion(_selectedEmotion);
+
+        return "";
     }
 
     private static IEnumerable<VendorLink> GetVendorLinks(VendorConfig vendor)
@@ -802,6 +862,8 @@
             _volume = _vendor.VolumeDef.Default;
             _inputFormat = TtsInputFormat.PlainText;
             _selectedStyle = "";
+            _selectedEmotion = "";
+            _emotionIntensity = TencentEmotionPolicy.DefaultIntensity;
             _styleDegree = 1.0;
             _ssmlText = "";
 
@@ -948,7 +1010,8 @@
             InputFormat = _inputFormat,
             Style = SupportsStyleControls ? _selectedStyle : "",
             StyleDegree = _styleDegree,
-            Emotion = SupportsEmotionControls && IsHuoshan ? HuoshanEmotionPolicy.ToRequestEmotion(_selectedEmotion) : "",
+            Emotion = GetRequestEmotion(),
+            EmotionIntensity = IsTencent ? _emotionIntensity : TencentEmotionPolicy.DefaultIntensity,
             ResourceId = SupportsEmotionControls && IsHuoshan && _selectedVoice != null ? HuoshanEmotionPolicy.GetResourceId(_selectedVoice) : "",
             Instructions = SupportsInstructionsControls ? _instructions : "",
             SsmlText = SupportsSsmlControls ? _ssmlText : ""
