@@ -8,6 +8,15 @@
 
 当前项目已经具备“选择厂商 -> 配置凭证 -> 选择音色 -> 生成播放”的主流程，但距离成熟的 TTS 生产/测试工具还有明显差距。最大短板不是界面是否能点通，而是厂商能力抽象还不够完整：音色库、模型、语言、情感、SSML、采样率、音频格式、长文本、试听、批量生成、历史管理和错误诊断都还没有形成统一的能力模型。
 
+## 2026-06-09 迭代记录
+
+- [x] **接入小米 MiMo V2.5 TTS 内置音色生成**
+  - 已完成：新增 `XiaomiMimoTtsProvider`，按官方 OpenAI-compatible Chat Completions 接口调用 `https://api.xiaomimimo.com/v1/chat/completions`，将合成文本放入 `assistant` 消息，将朗读指导作为可选 `user` 消息。
+  - 已完成：小米 MiMo 注册表新增 `mimo-v2.5-tts` 模型和官方内置音色 `mimo_default`、`冰糖`、`茉莉`、`苏打`、`白桦`、`Mia`、`Chloe`、`Milo`、`Dean`。
+  - 已完成：Workspace 复用现有“朗读指导”和“输出格式”控件，支持 `wav` / `pcm16`，Settings 增加 `MIMO_API_KEY` 凭证文案和关键链接。
+  - 已验证：新增自检覆盖小米 MiMo 请求体、指令消息省略逻辑、输出格式回落、base64 音频解析、fake HTTP 生成落盘、注册表能力和 Workspace/Settings 标记；自检与解决方案构建通过。
+  - 关联缺口：继续推进“接入更多厂商 API TTS 生成能力”和 P2-11；文本音色设计 `mimo-v2.5-tts-voicedesign`、音色复刻 `mimo-v2.5-tts-voiceclone` 暂未接入，后续需单独设计音色来源和上传/引用流程。
+
 ## 2026-06-08 迭代记录
 
 - [x] **补充火山引擎关键链接与设置页长反馈换行**

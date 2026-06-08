@@ -618,7 +618,8 @@
     private bool SupportsInstructionsControls =>
         VendorCapabilities.SupportsInstructions &&
         (_selectedModelId.StartsWith("gpt-4o", StringComparison.OrdinalIgnoreCase) ||
-         _selectedModelId.StartsWith("qwen3-tts-instruct", StringComparison.OrdinalIgnoreCase));
+         _selectedModelId.StartsWith("qwen3-tts-instruct", StringComparison.OrdinalIgnoreCase) ||
+         _selectedModelId.StartsWith("mimo-v2.5-tts", StringComparison.OrdinalIgnoreCase));
     private bool SupportsExpressionControls =>
         VendorCapabilities.HasExpressionControls &&
         (SupportsSsmlControls || SupportsStyleControls || HasHuoshanEmotionControls || HasTencentEmotionControls || SupportsInstructionsControls);
@@ -630,6 +631,7 @@
         "tencent" => "腾讯使用 EmotionCategory 和 EmotionIntensity 控制多情感音色",
         "openai" => "OpenAI 使用朗读指导控制语气和表达",
         "aliyun" => "阿里云 Instruct 模型使用语气提示控制表达",
+        "xiaomi_mimo" => "小米 MiMo 使用朗读指导控制语气、情绪和节奏",
         _ => "该厂商支持额外表达控制"
     };
     private string InputFieldLabel => SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml ? "SSML 文本" : "测试文本";

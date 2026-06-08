@@ -721,6 +721,92 @@ AssertEqual(".mp3", OpenAiTtsProvider.GetResponseFormatExtension("unknown"), "Op
 
 Console.WriteLine("OpenAI provider request body tests passed.");
 
+var xiaomiInstructionJson = XiaomiMimoTtsProvider.BuildChatCompletionRequestJson(new TtsRequest
+{
+    VendorId = "xiaomi_mimo",
+    ModelId = "mimo-v2.5-tts",
+    VoiceId = "mimo_default",
+    Text = "欢迎使用 VoiceOps。",
+    OutputFormat = "pcm16",
+    Instructions = "用温柔但专业的语气朗读。"
+});
+using (var xiaomiInstructionDoc = JsonDocument.Parse(xiaomiInstructionJson))
+{
+    AssertEqual("mimo-v2.5-tts", xiaomiInstructionDoc.RootElement.GetProperty("model").GetString(), "Xiaomi MiMo request sends selected model");
+    AssertFalse(xiaomiInstructionDoc.RootElement.GetProperty("stream").GetBoolean(), "Xiaomi MiMo request disables streaming for desktop file generation");
+    AssertEqual("mimo_default", xiaomiInstructionDoc.RootElement.GetProperty("audio").GetProperty("voice").GetString(), "Xiaomi MiMo request sends selected voice");
+    AssertEqual("pcm16", xiaomiInstructionDoc.RootElement.GetProperty("audio").GetProperty("format").GetString(), "Xiaomi MiMo request sends selected audio format");
+
+    var messages = xiaomiInstructionDoc.RootElement.GetProperty("messages").EnumerateArray().ToList();
+    AssertEqual(2, messages.Count, "Xiaomi MiMo request includes instruction and synthesis messages");
+    AssertEqual("user", messages[0].GetProperty("role").GetString(), "Xiaomi MiMo instruction message uses user role");
+    AssertEqual("用温柔但专业的语气朗读。", messages[0].GetProperty("content").GetString(), "Xiaomi MiMo request preserves reading instructions");
+    AssertEqual("assistant", messages[1].GetProperty("role").GetString(), "Xiaomi MiMo synthesis text message uses assistant role");
+    AssertEqual("欢迎使用 VoiceOps。", messages[1].GetProperty("content").GetString(), "Xiaomi MiMo assistant message preserves synthesis text");
+}
+
+var xiaomiPlainJson = XiaomiMimoTtsProvider.BuildChatCompletionRequestJson(new TtsRequest
+{
+    VendorId = "xiaomi_mimo",
+    ModelId = "mimo-v2.5-tts",
+    VoiceId = "mimo_default",
+    Text = "只发送要合成的文本。",
+    OutputFormat = "unsupported"
+});
+using (var xiaomiPlainDoc = JsonDocument.Parse(xiaomiPlainJson))
+{
+    var messages = xiaomiPlainDoc.RootElement.GetProperty("messages").EnumerateArray().ToList();
+    AssertEqual(1, messages.Count, "Xiaomi MiMo request omits empty instruction message");
+    AssertEqual("assistant", messages[0].GetProperty("role").GetString(), "Xiaomi MiMo plain request keeps assistant synthesis role");
+    AssertEqual("wav", xiaomiPlainDoc.RootElement.GetProperty("audio").GetProperty("format").GetString(), "Xiaomi MiMo request falls back to WAV for unsupported format");
+}
+
+var xiaomiAudioJson = """
+{
+  "choices": [
+    {
+      "message": {
+        "audio": {
+          "data": "AQIDBA=="
+        }
+      }
+    }
+  ]
+}
+""";
+AssertTrue(XiaomiMimoTtsProvider.TryExtractAudioBytes(xiaomiAudioJson, out var xiaomiAudioBytes), "Xiaomi MiMo response parser extracts nested audio data");
+AssertEqual(4, xiaomiAudioBytes.Length, "Xiaomi MiMo response parser decodes base64 audio bytes");
+AssertEqual(".pcm", XiaomiMimoTtsProvider.GetOutputFormatExtension("pcm16"), "Xiaomi MiMo PCM16 output uses pcm extension");
+AssertEqual(".wav", XiaomiMimoTtsProvider.GetOutputFormatExtension("unsupported"), "Xiaomi MiMo output extension falls back to wav");
+
+var xiaomiSettings = new SettingsService();
+xiaomiSettings.Settings.OutputDirectory = Path.Combine(Path.GetTempPath(), "VoiceServiceDemoTests", Guid.NewGuid().ToString("N"));
+var xiaomiHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new StringContent(xiaomiAudioJson, System.Text.Encoding.UTF8, "application/json")
+    });
+var xiaomiResult = await new XiaomiMimoTtsProvider(new HttpClient(xiaomiHandler), xiaomiSettings)
+    .GenerateAsync(new TtsRequest
+    {
+        VendorId = "xiaomi_mimo",
+        ModelId = "mimo-v2.5-tts",
+        VoiceId = "Chloe",
+        Text = "Save MiMo audio.",
+        OutputFormat = "pcm16",
+        Instructions = "Bright and clear."
+    }, "mimo-key");
+AssertTrue(xiaomiResult.Success, "Xiaomi MiMo fake generation succeeds");
+AssertTrue(xiaomiResult.FilePath?.EndsWith(".pcm", StringComparison.OrdinalIgnoreCase) == true, "Xiaomi MiMo PCM16 generation saves pcm file");
+AssertTrue(File.Exists(xiaomiResult.FilePath!), "Xiaomi MiMo fake generation writes output file");
+AssertEqual(4L, new FileInfo(xiaomiResult.FilePath!).Length, "Xiaomi MiMo fake generation writes decoded audio bytes");
+AssertTrue(
+    xiaomiHandler.RequestUris[0]?.AbsoluteUri == "https://api.xiaomimimo.com/v1/chat/completions",
+    "Xiaomi MiMo generation uses official chat completions endpoint");
+AssertTrue(xiaomiHandler.RequestBodies[0].Contains("\"voice\":\"Chloe\""), "Xiaomi MiMo generation sends selected built-in voice");
+
+Console.WriteLine("Xiaomi MiMo provider request body tests passed.");
+
 var googlePlainJson = GoogleTtsProvider.BuildSynthesizeRequestJson(new TtsRequest
 {
     VendorId = "google",
@@ -871,6 +957,15 @@ AssertTrue(aliyunVendor.Capabilities.SupportedOutputFormats.Contains("wav"), "Al
 AssertTrue(aliyunVendor.Capabilities.SupportedOutputFormats.Contains("pcm"), "Aliyun vendor exposes PCM output format");
 AssertTrue(aliyunVendor.DefaultModels.Any(model => model.Id == "cosyvoice-v3-flash"), "Aliyun vendor exposes CosyVoice V3 Flash model");
 
+var xiaomiMimoVendor = VendorRegistry.GetById("xiaomi_mimo") ?? throw new Exception("Xiaomi MiMo vendor config is missing");
+AssertTrue(xiaomiMimoVendor.Capabilities.SupportsInstructions, "Xiaomi MiMo vendor declares natural-language instruction support");
+AssertTrue(xiaomiMimoVendor.Capabilities.SupportedOutputFormats.Contains("wav"), "Xiaomi MiMo vendor exposes WAV output format");
+AssertTrue(xiaomiMimoVendor.Capabilities.SupportedOutputFormats.Contains("pcm16"), "Xiaomi MiMo vendor exposes PCM16 output format");
+AssertTrue(xiaomiMimoVendor.DefaultModels.Any(model => model.Id == "mimo-v2.5-tts"), "Xiaomi MiMo vendor exposes built-in voice TTS model");
+AssertTrue(xiaomiMimoVendor.DefaultVoices.Any(voice => voice.Id == "mimo_default"), "Xiaomi MiMo vendor exposes default built-in voice");
+AssertTrue(xiaomiMimoVendor.DefaultVoices.Any(voice => voice.Id == "冰糖"), "Xiaomi MiMo vendor exposes Chinese built-in voices");
+AssertFalse(xiaomiMimoVendor.SupportsVoiceFetch, "Xiaomi MiMo built-in voices are registered locally without an online refresh button");
+
 Console.WriteLine("Vendor capabilities registry tests passed.");
 
 var settingsRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Settings.razor");
@@ -881,6 +976,7 @@ AssertTrue(settingsMarkup.Contains("仅刷新全量音色库"), "Settings explai
 AssertTrue(settingsMarkup.Contains("API Key / 凭证"), "Settings generic credential input has a visible label");
 AssertTrue(settingsMarkup.Contains("关键链接"), "Settings exposes the vendor important links section");
 AssertTrue(settingsMarkup.Contains("vendor.ImportantLinks"), "Settings renders links from the shared vendor important link registry");
+AssertTrue(settingsMarkup.Contains("MIMO_API_KEY"), "Settings explains Xiaomi MiMo credential naming");
 
 var workspaceRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Workspace.razor");
 var workspaceMarkup = await File.ReadAllTextAsync(workspaceRazorPath);
@@ -897,6 +993,8 @@ AssertTrue(workspaceMarkup.Contains("OutputFormatOptions"), "Workspace renders o
 AssertTrue(workspaceMarkup.Contains("OutputFormat ="), "Workspace sends selected output format");
 AssertTrue(workspaceMarkup.Contains("OnModelChanged"), "Workspace recalculates output options when model changes");
 AssertTrue(workspaceMarkup.Contains("AliyunTtsProvider.GetSupportedOutputFormatsForModel"), "Workspace narrows Aliyun output formats by selected model");
+AssertTrue(workspaceMarkup.Contains("小米 MiMo 使用朗读指导"), "Workspace gives Xiaomi MiMo-specific instruction guidance");
+AssertTrue(workspaceMarkup.Contains("mimo-v2.5-tts"), "Workspace enables instructions for Xiaomi MiMo TTS model");
 
 var appCssPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "css", "app.css");
 var appCss = await File.ReadAllTextAsync(appCssPath);

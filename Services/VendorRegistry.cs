@@ -132,6 +132,55 @@ public static class VendorRegistry
         },
         new VendorConfig
         {
+            Id = "xiaomi_mimo",
+            Name = "小米 MiMo",
+            Description = "小米 MiMo V2.5 语音合成服务，支持通过自然语言指导控制语气、情绪和节奏。",
+            IconName = "sparkles",
+            ApiBaseUrl = "https://api.xiaomimimo.com/v1/chat/completions",
+            DocumentationUrl = "https://platform.xiaomimimo.com/docs/zh-CN/usage-guide/speech-synthesis-v2.5",
+            ImportantLinks = new()
+            {
+                new VendorLink
+                {
+                    Label = "API Key 管理",
+                    Url = "https://platform.xiaomimimo.com/#/console/api-keys",
+                    Description = "创建或管理 MIMO_API_KEY"
+                },
+                new VendorLink
+                {
+                    Label = "OpenAI 兼容 API",
+                    Url = "https://platform.xiaomimimo.com/docs/zh-CN/api/chat/openai-api",
+                    Description = "查看 Chat Completions 兼容接口和鉴权说明"
+                }
+            },
+            Capabilities = new VendorCapabilities
+            {
+                SupportsInstructions = true,
+                SupportedOutputFormats = new() { "wav", "pcm16" }
+            },
+            SpeedDef = new TtsParameterDef { IsSupported = false },
+            VolumeDef = new TtsParameterDef { IsSupported = false },
+            SupportsModelFetch = false,
+            SupportsVoiceFetch = false,
+            DefaultModels = new()
+            {
+                new VoiceModel { Id = "mimo-v2.5-tts", Name = "MiMo V2.5 TTS 内置音色" }
+            },
+            DefaultVoices = new()
+            {
+                new VoiceOption { Id = "mimo_default", Name = "MiMo 默认", Gender = "中性", Language = "多语言", Categories = new List<string> { "内置音色" } },
+                new VoiceOption { Id = "冰糖", Name = "冰糖", Gender = "女", Language = "中文", Categories = new List<string> { "内置音色", "中文" } },
+                new VoiceOption { Id = "茉莉", Name = "茉莉", Gender = "女", Language = "中文", Categories = new List<string> { "内置音色", "中文" } },
+                new VoiceOption { Id = "苏打", Name = "苏打", Gender = "男", Language = "中文", Categories = new List<string> { "内置音色", "中文" } },
+                new VoiceOption { Id = "白桦", Name = "白桦", Gender = "男", Language = "中文", Categories = new List<string> { "内置音色", "中文" } },
+                new VoiceOption { Id = "Mia", Name = "Mia", Gender = "女", Language = "英文", Categories = new List<string> { "内置音色", "英文" } },
+                new VoiceOption { Id = "Chloe", Name = "Chloe", Gender = "女", Language = "英文", Categories = new List<string> { "内置音色", "英文" } },
+                new VoiceOption { Id = "Milo", Name = "Milo", Gender = "男", Language = "英文", Categories = new List<string> { "内置音色", "英文" } },
+                new VoiceOption { Id = "Dean", Name = "Dean", Gender = "男", Language = "英文", Categories = new List<string> { "内置音色", "英文" } },
+            }
+        },
+        new VendorConfig
+        {
             Id = "baidu",
             Name = "百度智能云",
             Description = "百度短文本在线合成服务，稳定成熟的中文 TTS 引擎。",

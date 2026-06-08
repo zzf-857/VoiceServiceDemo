@@ -19,6 +19,7 @@ public class TtsService
     private readonly OpenAiTtsProvider _openAiProvider;
     private readonly AzureTtsProvider _azureProvider;
     private readonly BaiduTtsProvider _baiduProvider;
+    private readonly XiaomiMimoTtsProvider _xiaomiMimoProvider;
 
     public TtsService(SettingsService settingsService)
     {
@@ -31,6 +32,7 @@ public class TtsService
         _openAiProvider = new OpenAiTtsProvider(_httpClient, _settingsService);
         _azureProvider = new AzureTtsProvider(_httpClient, _settingsService);
         _baiduProvider = new BaiduTtsProvider(_httpClient, _settingsService);
+        _xiaomiMimoProvider = new XiaomiMimoTtsProvider(_httpClient, _settingsService);
     }
 
     /// <summary>
@@ -53,6 +55,7 @@ public class TtsService
                 "baidu" => await _baiduProvider.TestConnectivityAsync(apiKey),
                 "azure" => await _azureProvider.TestConnectivityAsync(apiKey),
                 "google" => await _googleProvider.TestConnectivityAsync(apiKey),
+                "xiaomi_mimo" => await _xiaomiMimoProvider.TestConnectivityAsync(apiKey),
                 _ => (false, "该厂商暂不支持连通性测试。")
             };
         }
@@ -106,6 +109,7 @@ public class TtsService
                 "baidu" => await _baiduProvider.GenerateAsync(request, apiKey),
                 "azure" => await _azureProvider.GenerateAsync(request, apiKey),
                 "google" => await _googleProvider.GenerateAsync(request, apiKey),
+                "xiaomi_mimo" => await _xiaomiMimoProvider.GenerateAsync(request, apiKey),
                 _ => new TtsResult { Success = false, ErrorMessage = $"该厂商 ({vendor.Name}) 暂未实现联调接口。" }
             };
         }
