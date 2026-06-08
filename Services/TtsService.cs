@@ -20,6 +20,7 @@ public class TtsService
     private readonly AzureTtsProvider _azureProvider;
     private readonly BaiduTtsProvider _baiduProvider;
     private readonly XiaomiMimoTtsProvider _xiaomiMimoProvider;
+    private readonly MiniMaxTtsProvider _miniMaxProvider;
 
     public TtsService(SettingsService settingsService)
     {
@@ -33,6 +34,7 @@ public class TtsService
         _azureProvider = new AzureTtsProvider(_httpClient, _settingsService);
         _baiduProvider = new BaiduTtsProvider(_httpClient, _settingsService);
         _xiaomiMimoProvider = new XiaomiMimoTtsProvider(_httpClient, _settingsService);
+        _miniMaxProvider = new MiniMaxTtsProvider(_httpClient, _settingsService);
     }
 
     /// <summary>
@@ -56,6 +58,7 @@ public class TtsService
                 "azure" => await _azureProvider.TestConnectivityAsync(apiKey),
                 "google" => await _googleProvider.TestConnectivityAsync(apiKey),
                 "xiaomi_mimo" => await _xiaomiMimoProvider.TestConnectivityAsync(apiKey),
+                "minimax" => await _miniMaxProvider.TestConnectivityAsync(apiKey),
                 _ => (false, "该厂商暂不支持连通性测试。")
             };
         }
@@ -77,6 +80,7 @@ public class TtsService
             if (vendorId == "tencent") return await _tencentProvider.FetchVoicesAsync(apiKey);
             if (vendorId == "google") return await _googleProvider.FetchVoicesAsync(apiKey);
             if (vendorId == "azure") return await _azureProvider.FetchVoicesAsync(apiKey);
+            if (vendorId == "minimax") return await _miniMaxProvider.FetchVoicesAsync(apiKey);
             return new List<VoiceOption>();
         }
         catch
@@ -110,6 +114,7 @@ public class TtsService
                 "azure" => await _azureProvider.GenerateAsync(request, apiKey),
                 "google" => await _googleProvider.GenerateAsync(request, apiKey),
                 "xiaomi_mimo" => await _xiaomiMimoProvider.GenerateAsync(request, apiKey),
+                "minimax" => await _miniMaxProvider.GenerateAsync(request, apiKey),
                 _ => new TtsResult { Success = false, ErrorMessage = $"该厂商 ({vendor.Name}) 暂未实现联调接口。" }
             };
         }

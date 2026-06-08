@@ -181,6 +181,56 @@ public static class VendorRegistry
         },
         new VendorConfig
         {
+            Id = "minimax",
+            Name = "MiniMax",
+            Description = "MiniMax 语音合成 HTTP API，支持多语言系统音色、克隆音色和生成音色。",
+            IconName = "sparkles",
+            ApiBaseUrl = "https://api.minimax.io/v1/t2a_v2",
+            DocumentationUrl = "https://platform.minimax.io/docs/api-reference/speech-t2a-http",
+            ImportantLinks = new()
+            {
+                new VendorLink
+                {
+                    Label = "API Key 管理",
+                    Url = "https://platform.minimax.io/user-center/basic-information/interface-key",
+                    Description = "创建或管理 MiniMax API Key"
+                },
+                new VendorLink
+                {
+                    Label = "音色列表 API",
+                    Url = "https://platform.minimax.io/docs/api-reference/voice-management-get",
+                    Description = "查看 get_voice 在线音色库接口"
+                }
+            },
+            Capabilities = new VendorCapabilities
+            {
+                SupportedOutputFormats = new() { "mp3", "wav", "flac", "pcm" }
+            },
+            SpeedDef = new TtsParameterDef { Min = 0.5, Max = 2.0, Default = 1.0, Step = 0.1 },
+            VolumeDef = new TtsParameterDef { Min = 0.1, Max = 10.0, Default = 1.0, Step = 0.1 },
+            SupportsModelFetch = false,
+            SupportsVoiceFetch = true,
+            DefaultModels = new()
+            {
+                new VoiceModel { Id = "speech-2.8-hd", Name = "Speech 2.8 HD" },
+                new VoiceModel { Id = "speech-2.8-turbo", Name = "Speech 2.8 Turbo" },
+                new VoiceModel { Id = "speech-2.6-hd", Name = "Speech 2.6 HD" },
+                new VoiceModel { Id = "speech-2.6-turbo", Name = "Speech 2.6 Turbo" },
+                new VoiceModel { Id = "speech-02-hd", Name = "Speech 02 HD" },
+                new VoiceModel { Id = "speech-02-turbo", Name = "Speech 02 Turbo" }
+            },
+            DefaultVoices = new()
+            {
+                new VoiceOption { Id = "Chinese (Mandarin)_Reliable_Executive", Name = "Reliable Executive", Gender = "男", Language = "中文", Categories = new List<string> { "系统音色", "中文" } },
+                new VoiceOption { Id = "Chinese (Mandarin)_News_Anchor", Name = "News Anchor", Gender = "女", Language = "中文", Categories = new List<string> { "系统音色", "中文" } },
+                new VoiceOption { Id = "English_expressive_narrator", Name = "Expressive Narrator", Gender = "中性", Language = "英文", Categories = new List<string> { "系统音色", "英文" } },
+                new VoiceOption { Id = "English_Graceful_Lady", Name = "Graceful Lady", Gender = "女", Language = "英文", Categories = new List<string> { "系统音色", "英文" } },
+                new VoiceOption { Id = "English_Persuasive_Man", Name = "Persuasive Man", Gender = "男", Language = "英文", Categories = new List<string> { "系统音色", "英文" } },
+                new VoiceOption { Id = "Japanese_Whisper_Belle", Name = "Whisper Belle", Gender = "女", Language = "日文", Categories = new List<string> { "系统音色", "日文" } }
+            }
+        },
+        new VendorConfig
+        {
             Id = "baidu",
             Name = "百度智能云",
             Description = "百度短文本在线合成服务，稳定成熟的中文 TTS 引擎。",

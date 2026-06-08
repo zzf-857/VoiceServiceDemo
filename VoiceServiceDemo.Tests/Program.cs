@@ -807,6 +807,158 @@ AssertTrue(xiaomiHandler.RequestBodies[0].Contains("\"voice\":\"Chloe\""), "Xiao
 
 Console.WriteLine("Xiaomi MiMo provider request body tests passed.");
 
+var miniMaxRequestJson = MiniMaxTtsProvider.BuildT2aRequestJson(new TtsRequest
+{
+    VendorId = "minimax",
+    ModelId = "speech-2.8-hd",
+    VoiceId = "Chinese (Mandarin)_Reliable_Executive",
+    Text = "欢迎使用 MiniMax 语音生成。",
+    Speed = 1.2,
+    Volume = 2.5,
+    OutputFormat = "flac"
+});
+using (var miniMaxRequestDoc = JsonDocument.Parse(miniMaxRequestJson))
+{
+    AssertEqual("speech-2.8-hd", miniMaxRequestDoc.RootElement.GetProperty("model").GetString(), "MiniMax request sends selected model");
+    AssertEqual("欢迎使用 MiniMax 语音生成。", miniMaxRequestDoc.RootElement.GetProperty("text").GetString(), "MiniMax request preserves synthesis text");
+    AssertFalse(miniMaxRequestDoc.RootElement.GetProperty("stream").GetBoolean(), "MiniMax request disables streaming for desktop file generation");
+    AssertEqual("auto", miniMaxRequestDoc.RootElement.GetProperty("language_boost").GetString(), "MiniMax request enables automatic language boost");
+    AssertEqual("hex", miniMaxRequestDoc.RootElement.GetProperty("output_format").GetString(), "MiniMax request asks for hex encoded audio");
+    AssertEqual("Chinese (Mandarin)_Reliable_Executive", miniMaxRequestDoc.RootElement.GetProperty("voice_setting").GetProperty("voice_id").GetString(), "MiniMax request sends selected voice");
+    AssertEqual(1.2, miniMaxRequestDoc.RootElement.GetProperty("voice_setting").GetProperty("speed").GetDouble(), "MiniMax request sends selected speed");
+    AssertEqual(2.5, miniMaxRequestDoc.RootElement.GetProperty("voice_setting").GetProperty("vol").GetDouble(), "MiniMax request sends selected volume");
+    AssertEqual(0, miniMaxRequestDoc.RootElement.GetProperty("voice_setting").GetProperty("pitch").GetInt32(), "MiniMax request keeps default pitch");
+    AssertEqual(32000, miniMaxRequestDoc.RootElement.GetProperty("audio_setting").GetProperty("sample_rate").GetInt32(), "MiniMax request uses a stable sample rate");
+    AssertEqual(128000, miniMaxRequestDoc.RootElement.GetProperty("audio_setting").GetProperty("bitrate").GetInt32(), "MiniMax request uses a stable bitrate");
+    AssertEqual("flac", miniMaxRequestDoc.RootElement.GetProperty("audio_setting").GetProperty("format").GetString(), "MiniMax request sends selected audio format");
+    AssertEqual(1, miniMaxRequestDoc.RootElement.GetProperty("audio_setting").GetProperty("channel").GetInt32(), "MiniMax request requests mono audio");
+}
+
+var miniMaxFallbackJson = MiniMaxTtsProvider.BuildT2aRequestJson(new TtsRequest
+{
+    VendorId = "minimax",
+    Text = "Fallback MiniMax request.",
+    OutputFormat = "unsupported"
+});
+using (var miniMaxFallbackDoc = JsonDocument.Parse(miniMaxFallbackJson))
+{
+    AssertEqual("speech-2.8-hd", miniMaxFallbackDoc.RootElement.GetProperty("model").GetString(), "MiniMax request falls back to default model");
+    AssertEqual("Chinese (Mandarin)_Reliable_Executive", miniMaxFallbackDoc.RootElement.GetProperty("voice_setting").GetProperty("voice_id").GetString(), "MiniMax request falls back to default voice");
+    AssertEqual("mp3", miniMaxFallbackDoc.RootElement.GetProperty("audio_setting").GetProperty("format").GetString(), "MiniMax request falls back to MP3 for unsupported format");
+}
+
+var miniMaxAudioJson = """
+{
+  "data": {
+    "audio": "010203ff",
+    "status": 2
+  },
+  "base_resp": {
+    "status_code": 0,
+    "status_msg": "success"
+  }
+}
+""";
+AssertTrue(MiniMaxTtsProvider.TryExtractAudioBytes(miniMaxAudioJson, out var miniMaxAudioBytes), "MiniMax response parser extracts hex audio");
+AssertEqual(4, miniMaxAudioBytes.Length, "MiniMax response parser decodes all hex bytes");
+AssertEqual(255, (int)miniMaxAudioBytes[3], "MiniMax response parser preserves high byte values");
+AssertFalse(MiniMaxTtsProvider.TryExtractAudioBytes("""{"base_resp":{"status_code":1004,"status_msg":"authentication failed"}}""", out _), "MiniMax response parser rejects provider error responses");
+AssertEqual(".mp3", MiniMaxTtsProvider.GetOutputFormatExtension("mp3"), "MiniMax MP3 output uses mp3 extension");
+AssertEqual(".wav", MiniMaxTtsProvider.GetOutputFormatExtension("wav"), "MiniMax WAV output uses wav extension");
+AssertEqual(".flac", MiniMaxTtsProvider.GetOutputFormatExtension("flac"), "MiniMax FLAC output uses flac extension");
+AssertEqual(".pcm", MiniMaxTtsProvider.GetOutputFormatExtension("pcm"), "MiniMax PCM output uses pcm extension");
+AssertEqual(".mp3", MiniMaxTtsProvider.GetOutputFormatExtension("unsupported"), "MiniMax output extension falls back to mp3");
+
+var miniMaxSettings = new SettingsService();
+miniMaxSettings.Settings.OutputDirectory = Path.Combine(Path.GetTempPath(), "VoiceServiceDemoTests", Guid.NewGuid().ToString("N"));
+var miniMaxHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new StringContent(miniMaxAudioJson, System.Text.Encoding.UTF8, "application/json")
+    });
+var miniMaxResult = await new MiniMaxTtsProvider(new HttpClient(miniMaxHandler), miniMaxSettings)
+    .GenerateAsync(new TtsRequest
+    {
+        VendorId = "minimax",
+        ModelId = "speech-2.8-turbo",
+        VoiceId = "English_expressive_narrator",
+        Text = "Save MiniMax audio.",
+        Speed = 0.9,
+        Volume = 1.5,
+        OutputFormat = "wav"
+    }, "minimax-key");
+AssertTrue(miniMaxResult.Success, "MiniMax fake generation succeeds");
+AssertTrue(miniMaxResult.FilePath?.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) == true, "MiniMax WAV generation saves wav file");
+AssertTrue(File.Exists(miniMaxResult.FilePath!), "MiniMax fake generation writes output file");
+AssertEqual(4L, new FileInfo(miniMaxResult.FilePath!).Length, "MiniMax fake generation writes decoded audio bytes");
+AssertTrue(
+    miniMaxHandler.RequestUris[0]?.AbsoluteUri == "https://api.minimax.io/v1/t2a_v2",
+    "MiniMax generation uses official T2A HTTP endpoint");
+AssertEqual("Bearer minimax-key", miniMaxHandler.RequestAuthorizationHeaders[0], "MiniMax generation sends Bearer authorization header");
+AssertTrue(miniMaxHandler.RequestBodies[0].Contains("\"voice_id\":\"English_expressive_narrator\""), "MiniMax generation sends selected voice");
+
+var miniMaxVoicesJson = """
+{
+  "system_voice": [
+    {
+      "voice_id": "Chinese (Mandarin)_Reliable_Executive",
+      "description": ["A steady and reliable male executive voice in standard Mandarin."],
+      "voice_name": "Steady Executive",
+      "created_time": "1970-01-01"
+    },
+    {
+      "voice_id": "Chinese (Mandarin)_News_Anchor",
+      "description": ["A professional middle-aged female news anchor voice in standard Mandarin."],
+      "voice_name": "News Anchor (Female)",
+      "created_time": "1970-01-01"
+    }
+  ],
+  "voice_cloning": [
+    {
+      "voice_id": "clone123",
+      "description": [],
+      "created_time": "2025-08-20"
+    }
+  ],
+  "voice_generation": [
+    {
+      "voice_id": "ttv-voice-2025082011321125-2uEN0X1S",
+      "description": [],
+      "created_time": "2025-08-21"
+    }
+  ],
+  "base_resp": {
+    "status_code": 0,
+    "status_msg": "success"
+  }
+}
+""";
+var miniMaxVoices = MiniMaxTtsProvider.ParseVoicesJson(miniMaxVoicesJson);
+AssertEqual(4, miniMaxVoices.Count, "MiniMax voice parser returns system, cloned, and generated voices");
+AssertEqual("Chinese (Mandarin)_Reliable_Executive", miniMaxVoices[0].Id, "MiniMax voice parser maps voice_id to id");
+AssertEqual("Steady Executive (Chinese (Mandarin)_Reliable_Executive)", miniMaxVoices[0].Name, "MiniMax voice parser combines display name and id");
+AssertEqual("男", miniMaxVoices[0].Gender, "MiniMax voice parser infers male gender from description");
+AssertEqual("中文", miniMaxVoices[0].Language, "MiniMax voice parser infers Mandarin language");
+AssertTrue(miniMaxVoices[0].Categories.Contains("系统音色"), "MiniMax voice parser tags system voices");
+AssertTrue(miniMaxVoices.Any(voice => voice.Id == "clone123" && voice.Categories.Contains("克隆音色")), "MiniMax voice parser tags cloned voices");
+AssertTrue(miniMaxVoices.Any(voice => voice.Id.StartsWith("ttv-voice-", StringComparison.Ordinal) && voice.Categories.Contains("生成音色")), "MiniMax voice parser tags generated voices");
+
+var miniMaxVoiceHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new StringContent(miniMaxVoicesJson, System.Text.Encoding.UTF8, "application/json")
+    });
+var miniMaxFetchedVoices = await new MiniMaxTtsProvider(new HttpClient(miniMaxVoiceHandler), miniMaxSettings)
+    .FetchVoicesAsync("minimax-key");
+AssertEqual(4, miniMaxFetchedVoices.Count, "MiniMax fake voice fetch returns parsed voices");
+AssertTrue(
+    miniMaxVoiceHandler.RequestUris[0]?.AbsoluteUri == "https://api.minimax.io/v1/get_voice",
+    "MiniMax voice fetch uses official get_voice endpoint");
+AssertEqual("Bearer minimax-key", miniMaxVoiceHandler.RequestAuthorizationHeaders[0], "MiniMax voice fetch sends Bearer authorization header");
+AssertTrue(miniMaxVoiceHandler.RequestBodies[0].Contains("\"voice_type\":\"all\""), "MiniMax voice fetch requests all available voice categories");
+
+Console.WriteLine("MiniMax provider request body and voice parser tests passed.");
+
 var googlePlainJson = GoogleTtsProvider.BuildSynthesizeRequestJson(new TtsRequest
 {
     VendorId = "google",
@@ -966,6 +1118,17 @@ AssertTrue(xiaomiMimoVendor.DefaultVoices.Any(voice => voice.Id == "mimo_default
 AssertTrue(xiaomiMimoVendor.DefaultVoices.Any(voice => voice.Id == "冰糖"), "Xiaomi MiMo vendor exposes Chinese built-in voices");
 AssertFalse(xiaomiMimoVendor.SupportsVoiceFetch, "Xiaomi MiMo built-in voices are registered locally without an online refresh button");
 
+var miniMaxVendor = VendorRegistry.GetById("minimax") ?? throw new Exception("MiniMax vendor config is missing");
+AssertTrue(miniMaxVendor.SupportsVoiceFetch, "MiniMax vendor enables online voice library refresh");
+AssertTrue(miniMaxVendor.Capabilities.SupportedOutputFormats.Contains("mp3"), "MiniMax vendor exposes MP3 output format");
+AssertTrue(miniMaxVendor.Capabilities.SupportedOutputFormats.Contains("wav"), "MiniMax vendor exposes WAV output format");
+AssertTrue(miniMaxVendor.Capabilities.SupportedOutputFormats.Contains("flac"), "MiniMax vendor exposes FLAC output format");
+AssertTrue(miniMaxVendor.Capabilities.SupportedOutputFormats.Contains("pcm"), "MiniMax vendor exposes PCM output format");
+AssertTrue(miniMaxVendor.DefaultModels.Any(model => model.Id == "speech-2.8-hd"), "MiniMax vendor exposes latest HD model");
+AssertTrue(miniMaxVendor.DefaultModels.Any(model => model.Id == "speech-2.8-turbo"), "MiniMax vendor exposes latest Turbo model");
+AssertTrue(miniMaxVendor.DefaultVoices.Any(voice => voice.Id == "Chinese (Mandarin)_Reliable_Executive"), "MiniMax vendor exposes a Mandarin default voice");
+AssertTrue(miniMaxVendor.DefaultVoices.Any(voice => voice.Id == "English_expressive_narrator"), "MiniMax vendor exposes an English example voice");
+
 Console.WriteLine("Vendor capabilities registry tests passed.");
 
 var settingsRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Settings.razor");
@@ -977,6 +1140,7 @@ AssertTrue(settingsMarkup.Contains("API Key / 凭证"), "Settings generic creden
 AssertTrue(settingsMarkup.Contains("关键链接"), "Settings exposes the vendor important links section");
 AssertTrue(settingsMarkup.Contains("vendor.ImportantLinks"), "Settings renders links from the shared vendor important link registry");
 AssertTrue(settingsMarkup.Contains("MIMO_API_KEY"), "Settings explains Xiaomi MiMo credential naming");
+AssertTrue(settingsMarkup.Contains("MINIMAX_API_KEY"), "Settings explains MiniMax credential naming");
 
 var homeRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Home.razor");
 var homeMarkup = await File.ReadAllTextAsync(homeRazorPath);
@@ -989,6 +1153,7 @@ AssertTrue(homeMarkup.Contains("assets/vendor-icons/baidu.ico"), "Home page uses
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/azure.ico"), "Home page uses local Azure brand icon");
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/google.ico"), "Home page uses local Google Cloud brand icon");
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/openai.svg"), "Home page uses local OpenAI brand icon");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/minimax.ico"), "Home page uses local MiniMax brand icon");
 
 var vendorIconRoot = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "assets", "vendor-icons");
 foreach (var iconFile in new[]
@@ -1000,7 +1165,8 @@ foreach (var iconFile in new[]
     "baidu.ico",
     "azure.ico",
     "google.ico",
-    "openai.svg"
+    "openai.svg",
+    "minimax.ico"
 })
 {
     var iconPath = Path.Combine(vendorIconRoot, iconFile);
@@ -1025,6 +1191,7 @@ AssertTrue(workspaceMarkup.Contains("OnModelChanged"), "Workspace recalculates o
 AssertTrue(workspaceMarkup.Contains("AliyunTtsProvider.GetSupportedOutputFormatsForModel"), "Workspace narrows Aliyun output formats by selected model");
 AssertTrue(workspaceMarkup.Contains("小米 MiMo 使用朗读指导"), "Workspace gives Xiaomi MiMo-specific instruction guidance");
 AssertTrue(workspaceMarkup.Contains("mimo-v2.5-tts"), "Workspace enables instructions for Xiaomi MiMo TTS model");
+AssertTrue(workspaceMarkup.Contains("请检查该厂商凭证"), "Workspace uses generic voice refresh credential guidance");
 
 var appCssPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "css", "app.css");
 var appCss = await File.ReadAllTextAsync(appCssPath);
@@ -1084,11 +1251,15 @@ internal sealed class RecordingQueueHandler : HttpMessageHandler
 
     public List<Uri?> RequestUris { get; } = new();
     public List<string> RequestBodies { get; } = new();
+    public List<string> RequestAuthorizationHeaders { get; } = new();
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         RequestUris.Add(request.RequestUri);
         RequestBodies.Add(request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken));
+        RequestAuthorizationHeaders.Add(request.Headers.Authorization is null
+            ? ""
+            : $"{request.Headers.Authorization.Scheme} {request.Headers.Authorization.Parameter}");
 
         if (_responses.Count == 0)
             throw new InvalidOperationException("No fake HTTP response queued.");

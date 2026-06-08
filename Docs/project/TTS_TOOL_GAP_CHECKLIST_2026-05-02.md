@@ -10,6 +10,14 @@
 
 ## 2026-06-09 迭代记录
 
+- [x] **接入 MiniMax T2A HTTP TTS 生成与在线音色库**
+  - 已完成：新增 `MiniMaxTtsProvider`，按官方 T2A HTTP 接口调用 `https://api.minimax.io/v1/t2a_v2`，使用 Bearer API Key 鉴权，非流式请求 `output_format=hex`，从 `data.audio` 解码 hex 音频并落盘。
+  - 已完成：MiniMax 注册表新增 `speech-2.8-hd`、`speech-2.8-turbo` 等模型，预置中文、英文、日文系统音色，并声明 `mp3` / `wav` / `flac` / `pcm` 输出格式。
+  - 已完成：接入 `https://api.minimax.io/v1/get_voice` 在线音色库刷新，解析 `system_voice`、`voice_cloning`、`voice_generation` 为桌面端 `VoiceOption`。
+  - 已完成：Settings 增加 `MINIMAX_API_KEY` 凭证文案，首页增加 MiniMax 官方 favicon，本次也把工作区音色刷新失败提示改为通用凭证文案。
+  - 已验证：新增自检覆盖 MiniMax 请求体、输出格式回落、hex 音频解析、fake HTTP 生成落盘、在线音色解析/拉取、注册表能力和 Workspace/Settings/Home 标记；自检与解决方案构建通过。
+  - 关联缺口：继续推进“接入更多厂商 API TTS 生成能力”和 P0-01/P1-07；流式 T2A、字幕、voice modify、混音权重和音色克隆管理暂未接入，后续需单独设计控制面板和音色来源。
+
 - [x] **修复窗口缩放布局稳定性并替换厂商真实图标**
   - 已完成：首页厂商卡片改为优先加载本地品牌图标资源，覆盖火山引擎、腾讯云、阿里云、小米 MiMo、百度智能云、Microsoft Azure、Google TTS、OpenAI。
   - 已完成：工作区外壳取消 `100vw` 依赖，避免 WebView/滚动条在窗口缩放时引发横向跳动。
