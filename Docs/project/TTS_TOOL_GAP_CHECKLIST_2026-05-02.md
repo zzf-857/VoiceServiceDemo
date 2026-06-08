@@ -35,6 +35,11 @@
   - 已完成：Google 在线音色会规范化为 `VoiceOption`，映射 `name`、`languageCodes` 和 `ssmlGender`。
   - 已验证：新增自检覆盖 Google voices JSON 解析；自检和解决方案顺序构建通过。
   - 关联缺口：完成 P2-14 的基础在线音色刷新；更细的语言筛选和缓存版本策略仍归 P1-03/P1-05。
+- [x] **接入 Azure 在线音色刷新**
+  - 已完成：新增 `AzureTtsProvider`，承接 Azure 连通性测试、SSML 生成和 voices/list 在线拉取。
+  - 已完成：Azure 在线音色会规范化为 `VoiceOption`，映射 `ShortName`、`LocalName/DisplayName`、`Gender`、`Locale`、`VoiceType` 和 `StyleList`。
+  - 已验证：新增自检覆盖 Azure voices/list JSON 解析；自检和解决方案顺序构建通过。
+  - 关联缺口：完成 P2-13，并继续推进 P2-11；Azure style 按音色动态过滤仍归 P1-09。
 
 ## P0：核心生成链路
 
@@ -256,7 +261,7 @@
 ## P2：厂商实现完整度
 
 - [ ] **P2-11 Provider 接口没有统一抽象**
-  - 现状：阿里、火山、腾讯拆成 provider，OpenAI/百度/Azure/Google 还在 `TtsService`。
+  - 现状：阿里、火山、腾讯、Google、OpenAI、Azure 已拆成 provider；百度仍在 `TtsService`。
   - 影响：功能扩展会让 `TtsService` 继续膨胀。
   - 建议：引入 `ITtsProvider`，统一 `GenerateAsync`、`FetchVoicesAsync`、`TestConnectivityAsync`、`GetCapabilities`。
   - 验收：`TtsService` 只负责路由和公共流程。
@@ -267,10 +272,10 @@
   - 建议：按当前百度接口重新梳理模型、音色、参数能力。
   - 验收：百度工作区能力与当前控制台能力基本一致。
 
-- [ ] **P2-13 Azure 音色在线拉取未实现**
-  - 现状：`SupportsVoiceFetch = true`，但 `TtsService.FetchVoicesAsync` 未实现 Azure 拉取。
-  - 影响：UI 显示可刷新，但返回空列表或只能用内置少量音色。
-  - 建议：实现 Azure voices/list 接口，按 region 和 locale 缓存。
+- [x] **P2-13 Azure 音色在线拉取未实现**
+  - 现状：桌面端已实现 Azure voices/list 拉取，并把 `ShortName`、`LocalName/DisplayName`、`Gender`、`Locale`、`VoiceType`、`StyleList` 规范化到 `VoiceOption`。
+  - 已修正：`TtsService.FetchVoicesAsync("azure")` 已接入 `AzureTtsProvider.FetchVoicesAsync`，工作区刷新音色会走在线接口。
+  - 后续影响：按音色动态过滤 Azure speaking style 仍归 P1-09；缓存 schema、过期策略继续归 P1-03。
   - 验收：Azure 可刷新完整音色库。
 
 - [x] **P2-14 Google 音色在线拉取未实现**

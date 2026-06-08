@@ -1,7 +1,5 @@
 using System.IO;
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
 using System.Text.Json;
 using VoiceServiceDemo.Models;
 using VoiceServiceDemo.Services.Providers;
@@ -20,6 +18,7 @@ public class TtsService
     private readonly TencentTtsProvider _tencentProvider;
     private readonly GoogleTtsProvider _googleProvider;
     private readonly OpenAiTtsProvider _openAiProvider;
+    private readonly AzureTtsProvider _azureProvider;
 
     public TtsService(SettingsService settingsService)
     {
@@ -30,6 +29,7 @@ public class TtsService
         _tencentProvider = new TencentTtsProvider(_httpClient, _settingsService);
         _googleProvider = new GoogleTtsProvider(_httpClient, _settingsService);
         _openAiProvider = new OpenAiTtsProvider(_httpClient, _settingsService);
+        _azureProvider = new AzureTtsProvider(_httpClient, _settingsService);
     }
 
     /// <summary>
@@ -50,7 +50,7 @@ public class TtsService
                 "huoshan" => await _huoshanProvider.TestConnectivityAsync(apiKey),
                 "tencent" => await _tencentProvider.TestConnectivityAsync(apiKey),
                 "baidu" => await TestBaiduAsync(apiKey),
-                "azure" => await TestAzureAsync(apiKey),
+                "azure" => await _azureProvider.TestConnectivityAsync(apiKey),
                 "google" => await _googleProvider.TestConnectivityAsync(apiKey),
                 _ => (false, "该厂商暂不支持连通性测试。")
             };
@@ -72,6 +72,7 @@ public class TtsService
             if (vendorId == "huoshan") return await _huoshanProvider.FetchVoicesAsync(apiKey);
             if (vendorId == "tencent") return await _tencentProvider.FetchVoicesAsync(apiKey);
             if (vendorId == "google") return await _googleProvider.FetchVoicesAsync(apiKey);
+            if (vendorId == "azure") return await _azureProvider.FetchVoicesAsync(apiKey);
             return new List<VoiceOption>();
         }
         catch
@@ -96,21 +97,6 @@ public class TtsService
         return (false, "access_token 获取失败，请检查 Key");
     }
 
-    private async Task<(bool, string)> TestAzureAsync(string apiKey)
-    {
-        var keys = apiKey.Split('|');
-        if (keys.Length < 2)
-            return (false, "格式错误，应为: subscription_key|region");
-        var url = $"https://{keys[1]}.api.cognitive.microsoft.com/sts/v1.0/issuetoken";
-        var req = new HttpRequestMessage(HttpMethod.Post, url);
-        req.Headers.Add("Ocp-Apim-Subscription-Key", keys[0]);
-        req.Content = new StringContent("", Encoding.UTF8);
-        var resp = await _httpClient.SendAsync(req);
-        return resp.IsSuccessStatusCode
-            ? (true, "Azure 连接成功 ✓")
-            : (false, $"鉴权失败 ({resp.StatusCode})");
-    }
-
     /// <summary>
     /// 通用语音合成入口
     /// </summary>
@@ -133,7 +119,7 @@ public class TtsService
                 "huoshan" => await _huoshanProvider.GenerateAsync(request, apiKey),
                 "tencent" => await _tencentProvider.GenerateAsync(request, apiKey),
                 "baidu" => await GenerateBaiduAsync(request, apiKey),
-                "azure" => await GenerateAzureAsync(request, apiKey),
+                "azure" => await _azureProvider.GenerateAsync(request, apiKey),
                 "google" => await _googleProvider.GenerateAsync(request, apiKey),
                 _ => new TtsResult { Success = false, ErrorMessage = $"该厂商 ({vendor.Name}) 暂未实现联调接口。" }
             };
@@ -172,32 +158,6 @@ public class TtsService
         }
 
         return await SaveAudioResponse(response, request, "baidu");
-    }
-
-    // ========== Microsoft Azure ==========
-    private async Task<TtsResult> GenerateAzureAsync(TtsRequest request, string apiKey)
-    {
-        // apiKey 格式: "{subscription_key}|{region}"
-        var keys = apiKey.Split('|');
-        if (keys.Length < 2)
-            return new TtsResult { Success = false, ErrorMessage = "Azure Key 格式应为: subscription_key|region (如 xxxxx|eastasia)" };
-
-        var ssml = AzureSsmlBuilder.Build(request);
-
-        var url = $"https://{keys[1]}.tts.speech.microsoft.com/cognitiveservices/v1";
-        var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
-        httpRequest.Headers.Add("Ocp-Apim-Subscription-Key", keys[0]);
-        httpRequest.Content = new StringContent(ssml, Encoding.UTF8, "application/ssml+xml");
-        httpRequest.Headers.Add("X-Microsoft-OutputFormat", "audio-16khz-128kbitrate-mono-mp3");
-
-        var response = await _httpClient.SendAsync(httpRequest);
-        if (!response.IsSuccessStatusCode)
-        {
-            var err = await response.Content.ReadAsStringAsync();
-            return new TtsResult { Success = false, ErrorMessage = $"Azure API 错误 ({response.StatusCode}): {err}" };
-        }
-
-        return await SaveAudioResponse(response, request, "azure");
     }
 
     // ========== 通用保存 ==========

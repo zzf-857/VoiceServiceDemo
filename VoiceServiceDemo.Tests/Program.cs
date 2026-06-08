@@ -269,6 +269,38 @@ AssertEqual("<speak version=\"1.0\">raw</speak>", AzureSsmlBuilder.Build(rawSsml
 
 Console.WriteLine("Azure SSML builder tests passed.");
 
+var azureVoices = AzureTtsProvider.ParseVoicesJson("""
+[
+  {
+    "Name": "Microsoft Server Speech Text to Speech Voice (zh-CN, XiaoxiaoNeural)",
+    "DisplayName": "Xiaoxiao",
+    "LocalName": "晓晓",
+    "ShortName": "zh-CN-XiaoxiaoNeural",
+    "Gender": "Female",
+    "Locale": "zh-CN",
+    "LocaleName": "Chinese (Mandarin, Simplified)",
+    "VoiceType": "Neural",
+    "StyleList": ["cheerful", "sad"]
+  },
+  {
+    "DisplayName": "Jenny",
+    "ShortName": "en-US-JennyNeural",
+    "Gender": "Female",
+    "Locale": "en-US",
+    "VoiceType": "Neural"
+  }
+]
+""");
+AssertEqual(2, azureVoices.Count, "Azure voice parser returns all voices");
+AssertEqual("zh-CN-XiaoxiaoNeural", azureVoices[0].Id, "Azure voice parser maps ShortName to id");
+AssertEqual("晓晓 (zh-CN)", azureVoices[0].Name, "Azure voice parser prefers LocalName and includes locale");
+AssertEqual("女", azureVoices[0].Gender, "Azure voice parser localizes female gender");
+AssertEqual("zh-CN", azureVoices[0].Language, "Azure voice parser maps locale to language");
+AssertTrue(azureVoices[0].Categories.Contains("Neural"), "Azure voice parser includes voice type category");
+AssertTrue(azureVoices[0].Categories.Contains("style:cheerful"), "Azure voice parser preserves style metadata as categories");
+
+Console.WriteLine("Azure voice parser tests passed.");
+
 var huoshanProvider = new HuoshanTtsProvider(new HttpClient(), new SettingsService());
 var noNetworkConnectivity = await huoshanProvider.TestConnectivityAsync("app-123|token-abc");
 AssertTrue(noNetworkConnectivity.Success, "Huoshan provider accepts basic speech credentials without OpenAPI call");
