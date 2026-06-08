@@ -1,6 +1,7 @@
 @page "/workspace/{VendorId}"
 @using System.IO
 @using System.Net.Http
+@using VoiceServiceDemo.Services.Providers
 
 @inject TtsService TtsService
 @inject SettingsService SettingsService
@@ -28,7 +29,7 @@
                 <div class="form-group model-picker">
                     <label>模型版本</label>
                     <div class="select-wrapper">
-                        <select class="form-select" @bind="_selectedModelId">
+                        <select class="form-select" value="@_selectedModelId" @onchange="OnModelChanged">
                             @foreach (var m in _vendor.DefaultModels)
                             {
                                 <option value="@m.Id">@m.Name</option>
@@ -607,12 +608,13 @@
     private bool IsAzure => _vendor?.Id == "azure";
     private bool IsHuoshan => _vendor?.Id == "huoshan";
     private bool IsTencent => _vendor?.Id == "tencent";
+    private bool IsAliyun => _vendor?.Id == "aliyun";
     private VendorCapabilities VendorCapabilities => _vendor?.Capabilities ?? new();
     private bool SupportsSsmlControls => VendorCapabilities.SupportsSsml;
     private bool SupportsStyleControls => VendorCapabilities.SupportsStyle;
     private bool SupportsStyleDegreeControls => VendorCapabilities.SupportsStyleDegree;
     private bool SupportsEmotionControls => VendorCapabilities.SupportsEmotion;
-    private bool SupportsOutputFormatControls => VendorCapabilities.SupportedOutputFormats.Any();
+    private bool SupportsOutputFormatControls => OutputFormatOptions.Count > 1;
     private bool SupportsInstructionsControls =>
         VendorCapabilities.SupportsInstructions &&
         (_selectedModelId.StartsWith("gpt-4o", StringComparison.OrdinalIgnoreCase) ||
@@ -632,7 +634,10 @@
     };
     private string InputFieldLabel => SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml ? "SSML 文本" : "测试文本";
     private string CurrentInputText => SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml ? _ssmlText : _inputText;
-    private IReadOnlyList<string> OutputFormatOptions => VendorCapabilities.SupportedOutputFormats;
+    private IReadOnlyList<string> OutputFormatOptions =>
+        IsAliyun
+            ? AliyunTtsProvider.GetSupportedOutputFormatsForModel(_selectedModelId)
+            : VendorCapabilities.SupportedOutputFormats;
     private List<TtsExpressionOption> HuoshanEmotionOptions => _selectedVoice == null ? new() : GetHuoshanEmotionOptions(_selectedVoice).ToList();
     private bool HasHuoshanEmotionControls => _selectedVoice != null && HuoshanEmotionPolicy.HasSelectableEmotionControls(_selectedVoice);
     private IReadOnlyList<TtsExpressionOption> TencentEmotionOptions => TencentEmotionPolicy.GetOptions();
@@ -684,6 +689,24 @@
     }
 
     private static string GetOutputFormatLabel(string format) => format.ToUpperInvariant();
+
+    private void OnModelChanged(ChangeEventArgs e)
+    {
+        _selectedModelId = e.Value?.ToString() ?? "";
+        EnsureValidOutputFormat();
+    }
+
+    private void EnsureValidOutputFormat()
+    {
+        var options = OutputFormatOptions;
+        _outputFormat = options.Contains(_outputFormat) ? _outputFormat : options.FirstOrDefault() ?? "mp3";
+    }
+
+    private string GetSelectedOutputFormat()
+    {
+        var options = OutputFormatOptions;
+        return options.Contains(_outputFormat) ? _outputFormat : options.FirstOrDefault() ?? "mp3";
+    }
 
     private string BuildSsmlStarter()
     {
@@ -933,6 +956,7 @@
                 ApplyVoiceList(_vendor.DefaultVoices.ToList(), "使用内置音色列表");
             }
             _selectedModelId = _vendor.DefaultModels.FirstOrDefault()?.Id ?? "";
+            EnsureValidOutputFormat();
         }
     }
 
@@ -1032,7 +1056,7 @@
             StyleDegree = _styleDegree,
             Emotion = GetRequestEmotion(),
             EmotionIntensity = IsTencent ? _emotionIntensity : TencentEmotionPolicy.DefaultIntensity,
-            OutputFormat = SupportsOutputFormatControls ? _outputFormat : "mp3",
+            OutputFormat = GetSelectedOutputFormat(),
             ResourceId = SupportsEmotionControls && IsHuoshan && _selectedVoice != null ? HuoshanEmotionPolicy.GetResourceId(_selectedVoice) : "",
             Instructions = SupportsInstructionsControls ? _instructions : "",
             SsmlText = SupportsSsmlControls ? _ssmlText : ""

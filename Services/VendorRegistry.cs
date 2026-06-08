@@ -110,7 +110,8 @@ public static class VendorRegistry
             DocumentationUrl = "https://help.aliyun.com/zh/model-studio/developer-reference/cosyvoice",
             Capabilities = new VendorCapabilities
             {
-                SupportsInstructions = true
+                SupportsInstructions = true,
+                SupportedOutputFormats = new() { "mp3", "pcm", "wav", "opus" }
             },
             SpeedDef = new TtsParameterDef { Min = 0.5, Max = 2.0, Default = 1.0, Step = 0.1 },
             VolumeDef = new TtsParameterDef { IsSupported = false }, // 暂时不支持直接调音量
@@ -118,7 +119,11 @@ public static class VendorRegistry
             SupportsVoiceFetch = true,
             DefaultModels = new()
             {
-                new VoiceModel { Id = "qwen3-tts-instruct-flash-2026-01-26", Name = "千问3-TTS-Instruct-Flash (2026-01-26)" }
+                new VoiceModel { Id = "qwen3-tts-instruct-flash-2026-01-26", Name = "千问3-TTS-Instruct-Flash (2026-01-26，固定 WAV)" },
+                new VoiceModel { Id = "qwen3-tts-flash", Name = "千问3-TTS-Flash (固定 WAV)" },
+                new VoiceModel { Id = "cosyvoice-v3-flash", Name = "CosyVoice V3 Flash" },
+                new VoiceModel { Id = "cosyvoice-v3-plus", Name = "CosyVoice V3 Plus" },
+                new VoiceModel { Id = "cosyvoice-v2", Name = "CosyVoice V2" }
             },
             DefaultVoices = new()
             {

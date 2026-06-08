@@ -8,6 +8,10 @@ namespace VoiceServiceDemo.Services.Providers;
 
 public sealed class AliyunTtsProvider
 {
+    private const string TextToAudioEndpoint = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2audio/generation";
+    private const string QwenTtsEndpoint = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
+    private const string CosyVoiceEndpoint = "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer";
+
     private readonly HttpClient _httpClient;
     private readonly SettingsService _settingsService;
 
@@ -19,8 +23,7 @@ public sealed class AliyunTtsProvider
 
     public async Task<(bool Success, string Message)> TestConnectivityAsync(string apiKey)
     {
-        var req = new HttpRequestMessage(HttpMethod.Post,
-            "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2audio/generation");
+        var req = new HttpRequestMessage(HttpMethod.Post, TextToAudioEndpoint);
         req.Headers.Add("Authorization", $"Bearer {apiKey}");
         req.Content = new StringContent("{}", Encoding.UTF8, "application/json");
 
@@ -90,17 +93,21 @@ public sealed class AliyunTtsProvider
     {
         HttpRequestMessage httpRequest;
 
-        if (request.ModelId.StartsWith("qwen3-tts", StringComparison.OrdinalIgnoreCase))
+        if (IsQwen3Model(request.ModelId))
         {
-            httpRequest = new HttpRequestMessage(HttpMethod.Post,
-                "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation");
+            httpRequest = new HttpRequestMessage(HttpMethod.Post, QwenTtsEndpoint);
+            httpRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
+            httpRequest.Content = new StringContent(BuildGenerateRequestJson(request), Encoding.UTF8, "application/json");
+        }
+        else if (IsCosyVoiceSpeechSynthesizerModel(request.ModelId))
+        {
+            httpRequest = new HttpRequestMessage(HttpMethod.Post, CosyVoiceEndpoint);
             httpRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
             httpRequest.Content = new StringContent(BuildGenerateRequestJson(request), Encoding.UTF8, "application/json");
         }
         else
         {
-            httpRequest = new HttpRequestMessage(HttpMethod.Post,
-                "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2audio/generation");
+            httpRequest = new HttpRequestMessage(HttpMethod.Post, TextToAudioEndpoint);
             httpRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
             httpRequest.Content = new StringContent(BuildGenerateRequestJson(request), Encoding.UTF8, "application/json");
         }
@@ -112,17 +119,15 @@ public sealed class AliyunTtsProvider
             return new TtsResult { Success = false, ErrorMessage = $"阿里云 API 错误 ({response.StatusCode}): {err}" };
         }
 
-        if (request.ModelId.StartsWith("qwen3-tts", StringComparison.OrdinalIgnoreCase))
+        if (IsQwen3Model(request.ModelId) || IsCosyVoiceSpeechSynthesizerModel(request.ModelId))
         {
             var jsonStr = await response.Content.ReadAsStringAsync();
             try
             {
-                using var jDoc = JsonDocument.Parse(jsonStr);
-                var audioUrl = jDoc.RootElement
-                    .GetProperty("output")
-                    .GetProperty("audio")
-                    .GetProperty("url")
-                    .GetString();
+                if (TryExtractAudioBytes(jsonStr, out var inlineAudioBytes))
+                    return await SaveAudioBytesAsync(inlineAudioBytes, request);
+
+                var audioUrl = TryExtractAudioUrl(jsonStr);
 
                 if (string.IsNullOrEmpty(audioUrl))
                     return new TtsResult { Success = false, ErrorMessage = "阿里云返回的音频 URL 为空" };
@@ -141,7 +146,7 @@ public sealed class AliyunTtsProvider
 
     public static string BuildGenerateRequestJson(TtsRequest request)
     {
-        if (request.ModelId.StartsWith("qwen3-tts", StringComparison.OrdinalIgnoreCase))
+        if (IsQwen3Model(request.ModelId))
         {
             var body = new Dictionary<string, object?>
             {
@@ -164,6 +169,23 @@ public sealed class AliyunTtsProvider
             return JsonSerializer.Serialize(body);
         }
 
+        if (IsCosyVoiceSpeechSynthesizerModel(request.ModelId))
+        {
+            var body = new
+            {
+                model = request.ModelId,
+                input = new
+                {
+                    text = request.Text,
+                    voice = request.VoiceId,
+                    format = NormalizeCosyVoiceOutputFormat(request.OutputFormat),
+                    sample_rate = 24000
+                }
+            };
+
+            return JsonSerializer.Serialize(body);
+        }
+
         var legacyBody = new
         {
             model = request.ModelId,
@@ -175,7 +197,42 @@ public sealed class AliyunTtsProvider
     }
 
     public static bool SupportsInstructions(string modelId) =>
+        IsQwen3InstructModel(modelId);
+
+    public static bool IsQwen3Model(string modelId) =>
+        modelId.StartsWith("qwen3-tts", StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsQwen3InstructModel(string modelId) =>
         modelId.StartsWith("qwen3-tts-instruct", StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsCosyVoiceSpeechSynthesizerModel(string modelId)
+    {
+        return modelId.Equals("cosyvoice-v2", StringComparison.OrdinalIgnoreCase) ||
+               modelId.StartsWith("cosyvoice-v3", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static IReadOnlyList<string> GetSupportedOutputFormatsForModel(string modelId) =>
+        IsQwen3Model(modelId)
+            ? new[] { "wav" }
+            : new[] { "mp3", "pcm", "wav", "opus" };
+
+    public static string NormalizeOutputFormat(string modelId, string outputFormat) =>
+        IsQwen3Model(modelId) ? "wav" : NormalizeCosyVoiceOutputFormat(outputFormat);
+
+    public static string GetOutputFormatExtension(string modelId, string outputFormat) =>
+        NormalizeOutputFormat(modelId, outputFormat) switch
+        {
+            "pcm" => ".pcm",
+            "wav" => ".wav",
+            "opus" => ".opus",
+            _ => ".mp3"
+        };
+
+    private static string NormalizeCosyVoiceOutputFormat(string outputFormat)
+    {
+        var normalized = (outputFormat ?? "").Trim().ToLowerInvariant();
+        return normalized is "mp3" or "pcm" or "wav" or "opus" ? normalized : "mp3";
+    }
 
     private void ParseVoiceConfig(JsonElement cfg, List<VoiceOption> options)
     {
@@ -227,7 +284,7 @@ public sealed class AliyunTtsProvider
 
     private async Task<TtsResult> SaveAudioBytesAsync(byte[] audioBytes, TtsRequest request)
     {
-        var filePath = GetOutputFilePath();
+        var filePath = GetOutputFilePath(request.ModelId, request.OutputFormat);
         await File.WriteAllBytesAsync(filePath, audioBytes);
 
         var vendor = VendorRegistry.GetById("aliyun");
@@ -242,11 +299,80 @@ public sealed class AliyunTtsProvider
         };
     }
 
-    private string GetOutputFilePath()
+    private string GetOutputFilePath(string modelId, string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
         Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"aliyun_{DateTime.Now:yyyyMMdd_HHmmss}.mp3");
+        return Path.Combine(dir, $"aliyun_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(modelId, outputFormat)}");
+    }
+
+    private static string? TryExtractAudioUrl(string jsonStr)
+    {
+        using var jDoc = JsonDocument.Parse(jsonStr);
+
+        if (TryGetNested(jDoc.RootElement, out var nestedUrl, "output", "audio", "url") &&
+            nestedUrl.ValueKind == JsonValueKind.String)
+            return nestedUrl.GetString();
+
+        if (TryGetNested(jDoc.RootElement, out var outputUrl, "output", "url") &&
+            outputUrl.ValueKind == JsonValueKind.String)
+            return outputUrl.GetString();
+
+        return null;
+    }
+
+    private static bool TryExtractAudioBytes(string jsonStr, out byte[] audioBytes)
+    {
+        audioBytes = Array.Empty<byte>();
+
+        try
+        {
+            using var jDoc = JsonDocument.Parse(jsonStr);
+
+            if (TryGetNested(jDoc.RootElement, out var audioData, "output", "audio", "data") &&
+                TryParseBase64String(audioData, out audioBytes))
+                return true;
+
+            if (TryGetNested(jDoc.RootElement, out var audio, "output", "audio") &&
+                TryParseBase64String(audio, out audioBytes))
+                return true;
+        }
+        catch
+        {
+            audioBytes = Array.Empty<byte>();
+        }
+
+        return false;
+    }
+
+    private static bool TryParseBase64String(JsonElement element, out byte[] bytes)
+    {
+        bytes = Array.Empty<byte>();
+        if (element.ValueKind != JsonValueKind.String)
+            return false;
+
+        var value = element.GetString();
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var buffer = new byte[value.Length];
+        if (!Convert.TryFromBase64String(value, buffer, out var bytesWritten))
+            return false;
+
+        bytes = buffer[..bytesWritten];
+        return true;
+    }
+
+    private static bool TryGetNested(JsonElement root, out JsonElement value, params string[] names)
+    {
+        value = root;
+        foreach (var name in names)
+        {
+            if (!value.TryGetProperty(name, out value))
+                return false;
+        }
+
+        return true;
     }
 
     private static string? TryGetStr(JsonElement elem, params string[] names)

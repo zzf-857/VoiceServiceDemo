@@ -421,6 +421,119 @@ using (var aliyunLegacyDoc = JsonDocument.Parse(aliyunLegacyJson))
         "Aliyun non-instruct request omits unsupported instructions");
 }
 
+var aliyunCosyVoiceWavJson = AliyunTtsProvider.BuildGenerateRequestJson(new TtsRequest
+{
+    VendorId = "aliyun",
+    ModelId = "cosyvoice-v3-flash",
+    VoiceId = "longxiaochun_v2",
+    Text = "输出 WAV。",
+    OutputFormat = "wav"
+});
+using (var aliyunCosyVoiceWavDoc = JsonDocument.Parse(aliyunCosyVoiceWavJson))
+{
+    AssertTrue(
+        TryGetNested(aliyunCosyVoiceWavDoc.RootElement, out var aliyunCosyVoiceWavFormat, "input", "format"),
+        "Aliyun CosyVoice request includes selected output format under input");
+    AssertEqual(
+        "wav",
+        aliyunCosyVoiceWavFormat.GetString(),
+        "Aliyun CosyVoice request sends selected output format");
+    AssertEqual(
+        "longxiaochun_v2",
+        aliyunCosyVoiceWavDoc.RootElement.GetProperty("input").GetProperty("voice").GetString(),
+        "Aliyun CosyVoice request keeps voice under input");
+}
+
+var aliyunCosyVoiceInvalidJson = AliyunTtsProvider.BuildGenerateRequestJson(new TtsRequest
+{
+    VendorId = "aliyun",
+    ModelId = "cosyvoice-v3-flash",
+    VoiceId = "longxiaochun_v2",
+    Text = "格式回落。",
+    OutputFormat = "unsupported"
+});
+using (var aliyunCosyVoiceInvalidDoc = JsonDocument.Parse(aliyunCosyVoiceInvalidJson))
+{
+    AssertTrue(
+        TryGetNested(aliyunCosyVoiceInvalidDoc.RootElement, out var aliyunCosyVoiceInvalidFormat, "input", "format"),
+        "Aliyun CosyVoice invalid-format request includes fallback format under input");
+    AssertEqual(
+        "mp3",
+        aliyunCosyVoiceInvalidFormat.GetString(),
+        "Aliyun CosyVoice request falls back to MP3 for unsupported format");
+}
+
+var aliyunQwenPcmJson = AliyunTtsProvider.BuildGenerateRequestJson(new TtsRequest
+{
+    VendorId = "aliyun",
+    ModelId = "qwen3-tts-instruct-flash-2026-01-26",
+    VoiceId = "Cherry",
+    Text = "千问保持官方固定格式。",
+    OutputFormat = "pcm"
+});
+using (var aliyunQwenPcmDoc = JsonDocument.Parse(aliyunQwenPcmJson))
+{
+    AssertFalse(
+        TryGetNested(aliyunQwenPcmDoc.RootElement, out _, "input", "format"),
+        "Aliyun Qwen3 TTS request omits unsupported output format field");
+}
+
+var aliyunQwenSettings = new SettingsService();
+aliyunQwenSettings.Settings.OutputDirectory = Path.Combine(Path.GetTempPath(), "VoiceServiceDemoTests", Guid.NewGuid().ToString("N"));
+var aliyunQwenHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new StringContent(
+            "{\"output\":{\"audio\":{\"url\":\"https://example.test/qwen.wav\"}}}",
+            System.Text.Encoding.UTF8,
+            "application/json")
+    },
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new ByteArrayContent(new byte[] { 1, 2, 3 })
+    });
+var aliyunQwenResult = await new AliyunTtsProvider(new HttpClient(aliyunQwenHandler), aliyunQwenSettings)
+    .GenerateAsync(new TtsRequest
+    {
+        VendorId = "aliyun",
+        ModelId = "qwen3-tts-instruct-flash-2026-01-26",
+        VoiceId = "Cherry",
+        Text = "千问保存为 WAV。",
+        OutputFormat = "pcm"
+    }, "dashscope-key");
+AssertTrue(aliyunQwenResult.Success, "Aliyun Qwen3 fake generation succeeds");
+AssertTrue(aliyunQwenResult.FilePath?.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) == true, "Aliyun Qwen3 non-streaming output uses official WAV extension");
+AssertFalse(aliyunQwenHandler.RequestBodies[0].Contains("\"format\""), "Aliyun Qwen3 generation request does not send unsupported format");
+
+var aliyunCosySettings = new SettingsService();
+aliyunCosySettings.Settings.OutputDirectory = Path.Combine(Path.GetTempPath(), "VoiceServiceDemoTests", Guid.NewGuid().ToString("N"));
+var aliyunCosyHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new StringContent(
+            "{\"output\":{\"audio\":{\"url\":\"https://example.test/cosy.pcm\"}}}",
+            System.Text.Encoding.UTF8,
+            "application/json")
+    },
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new ByteArrayContent(new byte[] { 4, 5, 6 })
+    });
+var aliyunCosyResult = await new AliyunTtsProvider(new HttpClient(aliyunCosyHandler), aliyunCosySettings)
+    .GenerateAsync(new TtsRequest
+    {
+        VendorId = "aliyun",
+        ModelId = "cosyvoice-v3-flash",
+        VoiceId = "longxiaochun_v2",
+        Text = "CosyVoice 保存 PCM。",
+        OutputFormat = "pcm"
+    }, "dashscope-key");
+AssertTrue(aliyunCosyResult.Success, "Aliyun CosyVoice fake generation succeeds");
+AssertTrue(
+    aliyunCosyHandler.RequestUris[0]?.AbsolutePath.EndsWith("/api/v1/services/audio/tts/SpeechSynthesizer", StringComparison.Ordinal) == true,
+    "Aliyun CosyVoice V3 uses official SpeechSynthesizer endpoint");
+AssertTrue(aliyunCosyResult.FilePath?.EndsWith(".pcm", StringComparison.OrdinalIgnoreCase) == true, "Aliyun CosyVoice PCM output uses pcm extension");
+
 Console.WriteLine("Aliyun provider request body tests passed.");
 
 var tencentProvider = new TencentTtsProvider(new HttpClient(), new SettingsService());
@@ -753,6 +866,11 @@ var baiduVendor = VendorRegistry.GetById("baidu") ?? throw new Exception("Baidu 
 AssertTrue(baiduVendor.Capabilities.SupportedOutputFormats.Contains("wav"), "Baidu vendor exposes WAV output format");
 AssertTrue(baiduVendor.Capabilities.SupportedOutputFormats.Contains("pcm_16k"), "Baidu vendor exposes PCM 16K output format");
 
+var aliyunVendor = VendorRegistry.GetById("aliyun") ?? throw new Exception("Aliyun vendor config is missing");
+AssertTrue(aliyunVendor.Capabilities.SupportedOutputFormats.Contains("wav"), "Aliyun vendor exposes WAV output format");
+AssertTrue(aliyunVendor.Capabilities.SupportedOutputFormats.Contains("pcm"), "Aliyun vendor exposes PCM output format");
+AssertTrue(aliyunVendor.DefaultModels.Any(model => model.Id == "cosyvoice-v3-flash"), "Aliyun vendor exposes CosyVoice V3 Flash model");
+
 Console.WriteLine("Vendor capabilities registry tests passed.");
 
 var settingsRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Settings.razor");
@@ -777,6 +895,8 @@ AssertTrue(workspaceMarkup.Contains("腾讯使用 EmotionCategory"), "Workspace 
 AssertTrue(workspaceMarkup.Contains("SupportsOutputFormatControls"), "Workspace can render output format controls from vendor capabilities");
 AssertTrue(workspaceMarkup.Contains("OutputFormatOptions"), "Workspace renders output format options");
 AssertTrue(workspaceMarkup.Contains("OutputFormat ="), "Workspace sends selected output format");
+AssertTrue(workspaceMarkup.Contains("OnModelChanged"), "Workspace recalculates output options when model changes");
+AssertTrue(workspaceMarkup.Contains("AliyunTtsProvider.GetSupportedOutputFormatsForModel"), "Workspace narrows Aliyun output formats by selected model");
 
 var appCssPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "css", "app.css");
 var appCss = await File.ReadAllTextAsync(appCssPath);
@@ -816,5 +936,29 @@ internal sealed class StaticResponseHandler : HttpMessageHandler
         {
             Content = new StringContent(_content, System.Text.Encoding.UTF8, "application/json")
         });
+    }
+}
+
+internal sealed class RecordingQueueHandler : HttpMessageHandler
+{
+    private readonly Queue<HttpResponseMessage> _responses;
+
+    public RecordingQueueHandler(params HttpResponseMessage[] responses)
+    {
+        _responses = new Queue<HttpResponseMessage>(responses);
+    }
+
+    public List<Uri?> RequestUris { get; } = new();
+    public List<string> RequestBodies { get; } = new();
+
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        RequestUris.Add(request.RequestUri);
+        RequestBodies.Add(request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken));
+
+        if (_responses.Count == 0)
+            throw new InvalidOperationException("No fake HTTP response queued.");
+
+        return _responses.Dequeue();
     }
 }
