@@ -10,6 +10,15 @@
 
 ## 2026-07-01 迭代记录
 
+- [x] **接入 Deepgram Aura TTS HTTP 生成与模型音色刷新**
+  - 已完成：新增 `DeepgramTtsProvider`，按官方接口调用 `POST https://api.deepgram.com/v1/speak`，使用 `Authorization: Token <key>` 鉴权，并将 Deepgram 的 Aura voice model 写入 `model` 查询参数。
+  - 已完成：Deepgram 请求体保持官方最小 `{ text }` 结构，输出格式通过查询参数映射为 `mp3`、`wav`（`linear16 + wav`）、`opus`（`opus + ogg`）和 `flac`，语速按官方 voice controls 范围夹取到 `0.7..1.5`。
+  - 已完成：Deepgram 注册表新增 Aura 2 示例模型/音色 `aura-2-thalia-en`、`aura-2-andromeda-en`、`aura-2-apollo-en`、`aura-2-arcas-en`、`aura-2-zeus-en`，并声明支持刷新模型派生音色库。
+  - 已完成：接入 `GET https://api.deepgram.com/v1/models`，解析 `tts[].canonical_name`、`name`、`architecture`、`language` 和 `metadata.gender/accent/tags` 为桌面端 `VoiceOption`。
+  - 已完成：Settings 增加 `DEEPGRAM_API_KEY` 凭证文案，首页增加 Deepgram 官方 lettermark 本地品牌图标。
+  - 已验证：新增自检覆盖 Deepgram 请求体、Speak URI 查询参数、输出格式回落、fake HTTP 生成落盘、`Token` 鉴权、模型列表解析/拉取、注册表能力和 Settings/Home 标记；自检通过。
+  - 关联缺口：继续推进“接入更多厂商 API TTS 生成能力”和 P0-01/P1-07/P2-11；长文本策略、实时流式播放、多语言筛选、项目私有模型授权状态和更细的采样率/码率控制暂未接入，后续需扩展统一高级参数与音色库元数据。
+
 - [x] **接入 Fish Audio TTS HTTP 生成与在线音色模型库**
   - 已完成：新增 `FishAudioTtsProvider`，按官方接口调用 `POST https://api.fish.audio/v1/tts`，使用 `Authorization: Bearer <token>` 鉴权，并按官方要求通过 `model` 请求头选择 `s2-pro` / `s2.1-pro` 等模型。
   - 已完成：Fish Audio 请求体接入 `text`、可选 `reference_id`、`format`、`mp3_bitrate`、`opus_bitrate`、`latency`、`normalize`、`temperature`、`top_p` 和 `prosody.speed/volume/normalize_loudness`，并将返回音频字节直接落盘。

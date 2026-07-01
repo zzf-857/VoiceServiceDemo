@@ -23,6 +23,7 @@ public class TtsService
     private readonly MiniMaxTtsProvider _miniMaxProvider;
     private readonly ElevenLabsTtsProvider _elevenLabsProvider;
     private readonly FishAudioTtsProvider _fishAudioProvider;
+    private readonly DeepgramTtsProvider _deepgramProvider;
 
     public TtsService(SettingsService settingsService)
     {
@@ -39,6 +40,7 @@ public class TtsService
         _miniMaxProvider = new MiniMaxTtsProvider(_httpClient, _settingsService);
         _elevenLabsProvider = new ElevenLabsTtsProvider(_httpClient, _settingsService);
         _fishAudioProvider = new FishAudioTtsProvider(_httpClient, _settingsService);
+        _deepgramProvider = new DeepgramTtsProvider(_httpClient, _settingsService);
     }
 
     /// <summary>
@@ -65,6 +67,7 @@ public class TtsService
                 "minimax" => await _miniMaxProvider.TestConnectivityAsync(apiKey),
                 "elevenlabs" => await _elevenLabsProvider.TestConnectivityAsync(apiKey),
                 "fish_audio" => await _fishAudioProvider.TestConnectivityAsync(apiKey),
+                "deepgram" => await _deepgramProvider.TestConnectivityAsync(apiKey),
                 _ => (false, "该厂商暂不支持连通性测试。")
             };
         }
@@ -89,6 +92,7 @@ public class TtsService
             if (vendorId == "minimax") return await _miniMaxProvider.FetchVoicesAsync(apiKey);
             if (vendorId == "elevenlabs") return await _elevenLabsProvider.FetchVoicesAsync(apiKey);
             if (vendorId == "fish_audio") return await _fishAudioProvider.FetchVoicesAsync(apiKey);
+            if (vendorId == "deepgram") return await _deepgramProvider.FetchVoicesAsync(apiKey);
             return new List<VoiceOption>();
         }
         catch
@@ -125,6 +129,7 @@ public class TtsService
                 "minimax" => await _miniMaxProvider.GenerateAsync(request, apiKey),
                 "elevenlabs" => await _elevenLabsProvider.GenerateAsync(request, apiKey),
                 "fish_audio" => await _fishAudioProvider.GenerateAsync(request, apiKey),
+                "deepgram" => await _deepgramProvider.GenerateAsync(request, apiKey),
                 _ => new TtsResult { Success = false, ErrorMessage = $"该厂商 ({vendor.Name}) 暂未实现联调接口。" }
             };
         }

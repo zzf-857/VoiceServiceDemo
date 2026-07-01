@@ -1228,6 +1228,131 @@ AssertEqual("Bearer fish-key", fishAudioVoiceHandler.RequestAuthorizationHeaders
 
 Console.WriteLine("Fish Audio provider request body and model parser tests passed.");
 
+var deepgramRequestJson = DeepgramTtsProvider.BuildSpeakRequestJson(new TtsRequest
+{
+    VendorId = "deepgram",
+    VoiceId = "aura-2-thalia-en",
+    Text = "Hello from Deepgram Aura.",
+    Speed = 1.2,
+    OutputFormat = "wav"
+});
+using (var deepgramRequestDoc = JsonDocument.Parse(deepgramRequestJson))
+{
+    AssertEqual("Hello from Deepgram Aura.", deepgramRequestDoc.RootElement.GetProperty("text").GetString(), "Deepgram request preserves synthesis text");
+    AssertFalse(deepgramRequestDoc.RootElement.TryGetProperty("model", out _), "Deepgram request body keeps model in query parameters");
+}
+
+var deepgramSpeakUri = DeepgramTtsProvider.BuildSpeakUri(new TtsRequest
+{
+    VendorId = "deepgram",
+    VoiceId = "aura-2-thalia-en",
+    Text = "Hello from Deepgram Aura.",
+    Speed = 1.2,
+    OutputFormat = "wav"
+});
+AssertEqual(
+    "https://api.deepgram.com/v1/speak?model=aura-2-thalia-en&encoding=linear16&container=wav&speed=1.2",
+    deepgramSpeakUri.AbsoluteUri,
+    "Deepgram speak URI maps selected voice model, WAV output, and speed");
+
+var deepgramFallbackUri = DeepgramTtsProvider.BuildSpeakUri(new TtsRequest
+{
+    VendorId = "deepgram",
+    ModelId = "aura-2-andromeda-en",
+    Text = "Fallback Deepgram request.",
+    Speed = 3.0,
+    OutputFormat = "unknown"
+});
+AssertTrue(deepgramFallbackUri.AbsoluteUri.Contains("model=aura-2-andromeda-en"), "Deepgram speak URI falls back to selected model when voice is empty");
+AssertTrue(deepgramFallbackUri.AbsoluteUri.Contains("encoding=mp3"), "Deepgram speak URI falls back to MP3 output");
+AssertTrue(deepgramFallbackUri.AbsoluteUri.Contains("speed=1.5"), "Deepgram speak URI clamps overly high speed");
+
+AssertEqual("mp3", DeepgramTtsProvider.NormalizeOutputFormat("unsupported"), "Deepgram output format falls back to MP3");
+AssertEqual(".mp3", DeepgramTtsProvider.GetOutputFormatExtension("mp3"), "Deepgram MP3 output uses mp3 extension");
+AssertEqual(".wav", DeepgramTtsProvider.GetOutputFormatExtension("wav"), "Deepgram WAV output uses wav extension");
+AssertEqual(".opus", DeepgramTtsProvider.GetOutputFormatExtension("opus"), "Deepgram Opus output uses opus extension");
+AssertEqual(".flac", DeepgramTtsProvider.GetOutputFormatExtension("flac"), "Deepgram FLAC output uses flac extension");
+
+var deepgramBytes = new byte[] { 10, 20, 30, 40, 50 };
+var deepgramSettings = new SettingsService();
+deepgramSettings.Settings.OutputDirectory = Path.Combine(Path.GetTempPath(), "VoiceServiceDemoTests", Guid.NewGuid().ToString("N"));
+var deepgramHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new ByteArrayContent(deepgramBytes)
+    });
+var deepgramResult = await new DeepgramTtsProvider(new HttpClient(deepgramHandler), deepgramSettings)
+    .GenerateAsync(new TtsRequest
+    {
+        VendorId = "deepgram",
+        VoiceId = "aura-2-apollo-en",
+        Text = "Save Deepgram audio.",
+        Speed = 0.9,
+        OutputFormat = "opus"
+    }, "deepgram-key");
+AssertTrue(deepgramResult.Success, "Deepgram fake generation succeeds");
+AssertTrue(deepgramResult.FilePath?.EndsWith(".opus", StringComparison.OrdinalIgnoreCase) == true, "Deepgram Opus generation saves opus file");
+AssertTrue(File.Exists(deepgramResult.FilePath!), "Deepgram fake generation writes output file");
+AssertEqual(5L, new FileInfo(deepgramResult.FilePath!).Length, "Deepgram fake generation writes returned audio bytes");
+AssertTrue(
+    deepgramHandler.RequestUris[0]?.AbsoluteUri == "https://api.deepgram.com/v1/speak?model=aura-2-apollo-en&encoding=opus&container=ogg&speed=0.9",
+    "Deepgram generation uses official speak endpoint with query media settings");
+AssertEqual("Token deepgram-key", deepgramHandler.RequestAuthorizationHeaders[0], "Deepgram generation sends Token authorization header");
+AssertTrue(deepgramHandler.RequestBodies[0].Contains("\"text\":\"Save Deepgram audio.\""), "Deepgram generation sends synthesis text in JSON body");
+
+var deepgramModelsJson = """
+{
+  "tts": [
+    {
+      "canonical_name": "aura-2-thalia-en",
+      "name": "Thalia",
+      "architecture": "aura-2",
+      "language": "en",
+      "metadata": {
+        "gender": "female",
+        "accent": "American",
+        "tags": ["conversational", "warm"]
+      }
+    },
+    {
+      "canonical_name": "aura-2-apollo-en",
+      "name": "Apollo",
+      "architecture": "aura-2",
+      "language": "en",
+      "metadata": {
+        "gender": "male",
+        "tags": ["confident"]
+      }
+    }
+  ]
+}
+""";
+var deepgramVoices = DeepgramTtsProvider.ParseModelsJson(deepgramModelsJson);
+AssertEqual(2, deepgramVoices.Count, "Deepgram model parser returns TTS models as voices");
+AssertEqual("aura-2-thalia-en", deepgramVoices[0].Id, "Deepgram model parser maps canonical_name to id");
+AssertEqual("Thalia (aura-2-thalia-en)", deepgramVoices[0].Name, "Deepgram model parser combines friendly voice name and canonical model");
+AssertEqual("女", deepgramVoices[0].Gender, "Deepgram model parser localizes female gender");
+AssertEqual("en", deepgramVoices[0].Language, "Deepgram model parser maps language");
+AssertTrue(deepgramVoices[0].Categories.Contains("aura-2"), "Deepgram model parser preserves architecture category");
+AssertTrue(deepgramVoices[0].Categories.Contains("American"), "Deepgram model parser preserves accent category");
+AssertTrue(deepgramVoices[0].Categories.Contains("warm"), "Deepgram model parser preserves metadata tags");
+AssertEqual("男", deepgramVoices[1].Gender, "Deepgram model parser localizes male gender");
+
+var deepgramVoiceHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new StringContent(deepgramModelsJson, System.Text.Encoding.UTF8, "application/json")
+    });
+var deepgramFetchedVoices = await new DeepgramTtsProvider(new HttpClient(deepgramVoiceHandler), deepgramSettings)
+    .FetchVoicesAsync("deepgram-key");
+AssertEqual(2, deepgramFetchedVoices.Count, "Deepgram fake voice fetch returns parsed TTS models");
+AssertTrue(
+    deepgramVoiceHandler.RequestUris[0]?.AbsoluteUri == "https://api.deepgram.com/v1/models",
+    "Deepgram voice fetch uses official models endpoint");
+AssertEqual("Token deepgram-key", deepgramVoiceHandler.RequestAuthorizationHeaders[0], "Deepgram voice fetch sends Token authorization header");
+
+Console.WriteLine("Deepgram provider request body and model parser tests passed.");
+
 var googlePlainJson = GoogleTtsProvider.BuildSynthesizeRequestJson(new TtsRequest
 {
     VendorId = "google",
@@ -1416,6 +1541,15 @@ AssertTrue(fishAudioVendor.Capabilities.SupportedOutputFormats.Contains("opus"),
 AssertTrue(fishAudioVendor.DefaultModels.Any(model => model.Id == "s2-pro"), "Fish Audio vendor exposes S2-Pro model header");
 AssertTrue(fishAudioVendor.DefaultVoices.Any(voice => voice.Id == "802e3bc2b27e49c2995d23ef70e6ac89"), "Fish Audio vendor exposes official Energetic Male example voice");
 
+var deepgramVendor = VendorRegistry.GetById("deepgram") ?? throw new Exception("Deepgram vendor config is missing");
+AssertTrue(deepgramVendor.SupportsVoiceFetch, "Deepgram vendor enables model-derived voice library refresh");
+AssertTrue(deepgramVendor.Capabilities.SupportedOutputFormats.Contains("mp3"), "Deepgram vendor exposes MP3 output format");
+AssertTrue(deepgramVendor.Capabilities.SupportedOutputFormats.Contains("wav"), "Deepgram vendor exposes WAV output format");
+AssertTrue(deepgramVendor.Capabilities.SupportedOutputFormats.Contains("opus"), "Deepgram vendor exposes Opus output format");
+AssertTrue(deepgramVendor.Capabilities.SupportedOutputFormats.Contains("flac"), "Deepgram vendor exposes FLAC output format");
+AssertTrue(deepgramVendor.DefaultModels.Any(model => model.Id == "aura-2-thalia-en"), "Deepgram vendor exposes Aura 2 Thalia model");
+AssertTrue(deepgramVendor.DefaultVoices.Any(voice => voice.Id == "aura-2-apollo-en"), "Deepgram vendor exposes official Apollo example voice");
+
 Console.WriteLine("Vendor capabilities registry tests passed.");
 
 var settingsRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Settings.razor");
@@ -1430,6 +1564,7 @@ AssertTrue(settingsMarkup.Contains("MIMO_API_KEY"), "Settings explains Xiaomi Mi
 AssertTrue(settingsMarkup.Contains("MINIMAX_API_KEY"), "Settings explains MiniMax credential naming");
 AssertTrue(settingsMarkup.Contains("ELEVENLABS_API_KEY"), "Settings explains ElevenLabs credential naming");
 AssertTrue(settingsMarkup.Contains("FISH_AUDIO_API_KEY"), "Settings explains Fish Audio credential naming");
+AssertTrue(settingsMarkup.Contains("DEEPGRAM_API_KEY"), "Settings explains Deepgram credential naming");
 
 var homeRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Home.razor");
 var homeMarkup = await File.ReadAllTextAsync(homeRazorPath);
@@ -1445,6 +1580,7 @@ AssertTrue(homeMarkup.Contains("assets/vendor-icons/openai.svg"), "Home page use
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/minimax.ico"), "Home page uses local MiniMax brand icon");
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/elevenlabs.svg"), "Home page uses local ElevenLabs brand icon");
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/fish_audio.svg"), "Home page uses local Fish Audio brand icon");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/deepgram.svg"), "Home page uses local Deepgram brand icon");
 
 var vendorIconRoot = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "assets", "vendor-icons");
 foreach (var iconFile in new[]
@@ -1459,7 +1595,8 @@ foreach (var iconFile in new[]
     "openai.svg",
     "minimax.ico",
     "elevenlabs.svg",
-    "fish_audio.svg"
+    "fish_audio.svg",
+    "deepgram.svg"
 })
 {
     var iconPath = Path.Combine(vendorIconRoot, iconFile);

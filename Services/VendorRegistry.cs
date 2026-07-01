@@ -315,6 +315,66 @@ public static class VendorRegistry
         },
         new VendorConfig
         {
+            Id = "deepgram",
+            Name = "Deepgram Aura TTS",
+            Description = "Deepgram Aura 低延迟语音合成服务，适合英文和多语种实时内容生成。",
+            IconName = "sparkles",
+            ApiBaseUrl = "https://api.deepgram.com/v1/speak",
+            DocumentationUrl = "https://developers.deepgram.com/docs/text-to-speech",
+            ImportantLinks = new()
+            {
+                new VendorLink
+                {
+                    Label = "API Key 管理",
+                    Url = "https://console.deepgram.com/project/keys",
+                    Description = "创建或管理 DEEPGRAM_API_KEY"
+                },
+                new VendorLink
+                {
+                    Label = "Speak API",
+                    Url = "https://developers.deepgram.com/reference/text-to-speech/speak-request",
+                    Description = "查看 /v1/speak 语音生成接口"
+                },
+                new VendorLink
+                {
+                    Label = "Aura 模型与音色",
+                    Url = "https://developers.deepgram.com/docs/tts-models",
+                    Description = "查看 Deepgram TTS 模型、音色和语言列表"
+                },
+                new VendorLink
+                {
+                    Label = "音频输出设置",
+                    Url = "https://developers.deepgram.com/docs/tts-media-output-settings",
+                    Description = "查看 encoding、container、sample_rate 和 bit_rate 参数"
+                }
+            },
+            Capabilities = new VendorCapabilities
+            {
+                SupportedOutputFormats = new() { "mp3", "wav", "opus", "flac" }
+            },
+            SpeedDef = new TtsParameterDef { Min = 0.7, Max = 1.5, Default = 1.0, Step = 0.05 },
+            VolumeDef = new TtsParameterDef { IsSupported = false },
+            SupportsModelFetch = false,
+            SupportsVoiceFetch = true,
+            DefaultModels = new()
+            {
+                new VoiceModel { Id = "aura-2-thalia-en", Name = "Aura 2 Thalia" },
+                new VoiceModel { Id = "aura-2-andromeda-en", Name = "Aura 2 Andromeda" },
+                new VoiceModel { Id = "aura-2-apollo-en", Name = "Aura 2 Apollo" },
+                new VoiceModel { Id = "aura-2-arcas-en", Name = "Aura 2 Arcas" },
+                new VoiceModel { Id = "aura-2-zeus-en", Name = "Aura 2 Zeus" }
+            },
+            DefaultVoices = new()
+            {
+                new VoiceOption { Id = "aura-2-thalia-en", Name = "Thalia", Gender = "女", Language = "英文", Categories = new List<string> { "Aura 2", "English" } },
+                new VoiceOption { Id = "aura-2-andromeda-en", Name = "Andromeda", Gender = "女", Language = "英文", Categories = new List<string> { "Aura 2", "English" } },
+                new VoiceOption { Id = "aura-2-apollo-en", Name = "Apollo", Gender = "男", Language = "英文", Categories = new List<string> { "Aura 2", "English" } },
+                new VoiceOption { Id = "aura-2-arcas-en", Name = "Arcas", Gender = "男", Language = "英文", Categories = new List<string> { "Aura 2", "English" } },
+                new VoiceOption { Id = "aura-2-zeus-en", Name = "Zeus", Gender = "男", Language = "英文", Categories = new List<string> { "Aura 2", "English" } }
+            }
+        },
+        new VendorConfig
+        {
             Id = "elevenlabs",
             Name = "ElevenLabs",
             Description = "ElevenLabs 高自然度多语言语音合成服务，支持在线音色库和多种音频输出格式。",
