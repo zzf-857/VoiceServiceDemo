@@ -1092,6 +1092,142 @@ AssertEqual("eleven-key", elevenLabsVoiceHandler.RequestHeaderValues[0]["xi-api-
 
 Console.WriteLine("ElevenLabs provider request body and voice parser tests passed.");
 
+var fishAudioRequestJson = FishAudioTtsProvider.BuildTtsRequestJson(new TtsRequest
+{
+    VendorId = "fish_audio",
+    ModelId = "s2-pro",
+    VoiceId = "802e3bc2b27e49c2995d23ef70e6ac89",
+    Text = "Hello from Fish Audio.",
+    Speed = 1.3,
+    Volume = -4,
+    OutputFormat = "wav"
+});
+using (var fishAudioRequestDoc = JsonDocument.Parse(fishAudioRequestJson))
+{
+    AssertEqual("Hello from Fish Audio.", fishAudioRequestDoc.RootElement.GetProperty("text").GetString(), "Fish Audio request preserves synthesis text");
+    AssertEqual("802e3bc2b27e49c2995d23ef70e6ac89", fishAudioRequestDoc.RootElement.GetProperty("reference_id").GetString(), "Fish Audio request sends selected reference_id");
+    AssertEqual("wav", fishAudioRequestDoc.RootElement.GetProperty("format").GetString(), "Fish Audio request sends selected output format");
+    AssertTrue(fishAudioRequestDoc.RootElement.GetProperty("normalize").GetBoolean(), "Fish Audio request enables text normalization");
+    AssertEqual("balanced", fishAudioRequestDoc.RootElement.GetProperty("latency").GetString(), "Fish Audio request uses balanced latency by default");
+    AssertEqual(128, fishAudioRequestDoc.RootElement.GetProperty("mp3_bitrate").GetInt32(), "Fish Audio request sends stable MP3 bitrate");
+    AssertEqual(32, fishAudioRequestDoc.RootElement.GetProperty("opus_bitrate").GetInt32(), "Fish Audio request sends stable Opus bitrate");
+    AssertEqual(0.7, fishAudioRequestDoc.RootElement.GetProperty("temperature").GetDouble(), "Fish Audio request sends stable temperature");
+    AssertEqual(0.7, fishAudioRequestDoc.RootElement.GetProperty("top_p").GetDouble(), "Fish Audio request sends stable top_p");
+    var fishProsody = fishAudioRequestDoc.RootElement.GetProperty("prosody");
+    AssertEqual(1.3, fishProsody.GetProperty("speed").GetDouble(), "Fish Audio request maps desktop speed to prosody.speed");
+    AssertEqual(-4, fishProsody.GetProperty("volume").GetDouble(), "Fish Audio request maps desktop volume to prosody.volume");
+    AssertTrue(fishProsody.GetProperty("normalize_loudness").GetBoolean(), "Fish Audio request normalizes loudness");
+}
+
+var fishAudioFallbackJson = FishAudioTtsProvider.BuildTtsRequestJson(new TtsRequest
+{
+    VendorId = "fish_audio",
+    Text = "Fallback Fish Audio request.",
+    Speed = 5,
+    Volume = -100,
+    OutputFormat = "unsupported"
+});
+using (var fishAudioFallbackDoc = JsonDocument.Parse(fishAudioFallbackJson))
+{
+    AssertEqual("mp3", fishAudioFallbackDoc.RootElement.GetProperty("format").GetString(), "Fish Audio request falls back to MP3 output");
+    AssertFalse(fishAudioFallbackDoc.RootElement.TryGetProperty("reference_id", out _), "Fish Audio request omits empty reference_id and can use default voice");
+    AssertEqual(2.0, fishAudioFallbackDoc.RootElement.GetProperty("prosody").GetProperty("speed").GetDouble(), "Fish Audio request clamps overly high speed");
+    AssertEqual(-20, fishAudioFallbackDoc.RootElement.GetProperty("prosody").GetProperty("volume").GetDouble(), "Fish Audio request clamps overly low volume");
+    AssertEqual("s2-pro", FishAudioTtsProvider.NormalizeModelId(""), "Fish Audio model header falls back to S2-Pro");
+}
+
+AssertEqual(".mp3", FishAudioTtsProvider.GetOutputFormatExtension("mp3"), "Fish Audio MP3 output uses mp3 extension");
+AssertEqual(".wav", FishAudioTtsProvider.GetOutputFormatExtension("wav"), "Fish Audio WAV output uses wav extension");
+AssertEqual(".pcm", FishAudioTtsProvider.GetOutputFormatExtension("pcm"), "Fish Audio PCM output uses pcm extension");
+AssertEqual(".opus", FishAudioTtsProvider.GetOutputFormatExtension("opus"), "Fish Audio Opus output uses opus extension");
+
+var fishAudioBytes = new byte[] { 9, 8, 7, 6 };
+var fishAudioSettings = new SettingsService();
+fishAudioSettings.Settings.OutputDirectory = Path.Combine(Path.GetTempPath(), "VoiceServiceDemoTests", Guid.NewGuid().ToString("N"));
+var fishAudioHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new ByteArrayContent(fishAudioBytes)
+    });
+var fishAudioResult = await new FishAudioTtsProvider(new HttpClient(fishAudioHandler), fishAudioSettings)
+    .GenerateAsync(new TtsRequest
+    {
+        VendorId = "fish_audio",
+        ModelId = "s2-pro",
+        VoiceId = "ca3007f96ae7499ab87d27ea3599956a",
+        Text = "Save Fish Audio.",
+        Speed = 1.1,
+        Volume = 2,
+        OutputFormat = "opus"
+    }, "fish-key");
+AssertTrue(fishAudioResult.Success, "Fish Audio fake generation succeeds");
+AssertTrue(fishAudioResult.FilePath?.EndsWith(".opus", StringComparison.OrdinalIgnoreCase) == true, "Fish Audio Opus generation saves opus file");
+AssertTrue(File.Exists(fishAudioResult.FilePath!), "Fish Audio fake generation writes output file");
+AssertEqual(4L, new FileInfo(fishAudioResult.FilePath!).Length, "Fish Audio fake generation writes returned audio bytes");
+AssertTrue(
+    fishAudioHandler.RequestUris[0]?.AbsoluteUri == "https://api.fish.audio/v1/tts",
+    "Fish Audio generation uses official TTS endpoint");
+AssertEqual("Bearer fish-key", fishAudioHandler.RequestAuthorizationHeaders[0], "Fish Audio generation sends Bearer authorization header");
+AssertEqual("s2-pro", fishAudioHandler.RequestHeaderValues[0]["model"], "Fish Audio generation sends TTS model header");
+AssertTrue(fishAudioHandler.RequestBodies[0].Contains("\"reference_id\":\"ca3007f96ae7499ab87d27ea3599956a\""), "Fish Audio generation sends selected voice reference_id");
+
+var fishAudioModelsJson = """
+{
+  "total": 2,
+  "items": [
+    {
+      "_id": "ca3007f96ae7499ab87d27ea3599956a",
+      "title": "E-Girl Voice",
+      "description": "A bright anime-style voice.",
+      "tags": ["English", "Female", "Anime"],
+      "languages": ["en"],
+      "visibility": "public",
+      "samples": [
+        {
+          "title": "Preview",
+          "audio": "https://example.com/e-girl.mp3"
+        }
+      ]
+    },
+    {
+      "_id": "802e3bc2b27e49c2995d23ef70e6ac89",
+      "title": "Energetic Male",
+      "tags": ["English", "Male"],
+      "languages": ["en", "zh"],
+      "visibility": "public",
+      "samples": []
+    }
+  ],
+  "has_more": false
+}
+""";
+var fishAudioVoices = FishAudioTtsProvider.ParseModelsJson(fishAudioModelsJson);
+AssertEqual(2, fishAudioVoices.Count, "Fish Audio model parser returns all voice models");
+AssertEqual("ca3007f96ae7499ab87d27ea3599956a", fishAudioVoices[0].Id, "Fish Audio model parser maps _id to id");
+AssertEqual("E-Girl Voice", fishAudioVoices[0].Name, "Fish Audio model parser maps title to display name");
+AssertEqual("女", fishAudioVoices[0].Gender, "Fish Audio model parser infers female gender from tags");
+AssertEqual("en", fishAudioVoices[0].Language, "Fish Audio model parser joins languages");
+AssertEqual("https://example.com/e-girl.mp3", fishAudioVoices[0].SampleUrl, "Fish Audio model parser reads sample preview audio");
+AssertTrue(fishAudioVoices[0].Categories.Contains("Anime"), "Fish Audio model parser preserves tag categories");
+AssertTrue(fishAudioVoices[0].Categories.Contains("public"), "Fish Audio model parser keeps visibility category");
+AssertEqual("男", fishAudioVoices[1].Gender, "Fish Audio model parser infers male gender from tags");
+AssertEqual("en, zh", fishAudioVoices[1].Language, "Fish Audio model parser joins multiple languages");
+
+var fishAudioVoiceHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new StringContent(fishAudioModelsJson, System.Text.Encoding.UTF8, "application/json")
+    });
+var fishAudioFetchedVoices = await new FishAudioTtsProvider(new HttpClient(fishAudioVoiceHandler), fishAudioSettings)
+    .FetchVoicesAsync("fish-key");
+AssertEqual(2, fishAudioFetchedVoices.Count, "Fish Audio fake voice fetch returns parsed models");
+AssertTrue(
+    fishAudioVoiceHandler.RequestUris[0]?.AbsoluteUri == "https://api.fish.audio/model?page_size=50&page_number=1&sort_by=task_count",
+    "Fish Audio voice fetch uses official model endpoint with stable pagination");
+AssertEqual("Bearer fish-key", fishAudioVoiceHandler.RequestAuthorizationHeaders[0], "Fish Audio voice fetch sends Bearer authorization header");
+
+Console.WriteLine("Fish Audio provider request body and model parser tests passed.");
+
 var googlePlainJson = GoogleTtsProvider.BuildSynthesizeRequestJson(new TtsRequest
 {
     VendorId = "google",
@@ -1271,6 +1407,15 @@ AssertTrue(elevenLabsVendor.Capabilities.SupportedOutputFormats.Contains("ulaw_8
 AssertTrue(elevenLabsVendor.DefaultModels.Any(model => model.Id == "eleven_multilingual_v2"), "ElevenLabs vendor exposes multilingual model");
 AssertTrue(elevenLabsVendor.DefaultVoices.Any(voice => voice.Id == "JBFqnCBsd6RMkjVDRZzb"), "ElevenLabs vendor exposes official example voice");
 
+var fishAudioVendor = VendorRegistry.GetById("fish_audio") ?? throw new Exception("Fish Audio vendor config is missing");
+AssertTrue(fishAudioVendor.SupportsVoiceFetch, "Fish Audio vendor enables online voice library refresh");
+AssertTrue(fishAudioVendor.Capabilities.SupportedOutputFormats.Contains("mp3"), "Fish Audio vendor exposes MP3 output format");
+AssertTrue(fishAudioVendor.Capabilities.SupportedOutputFormats.Contains("wav"), "Fish Audio vendor exposes WAV output format");
+AssertTrue(fishAudioVendor.Capabilities.SupportedOutputFormats.Contains("pcm"), "Fish Audio vendor exposes PCM output format");
+AssertTrue(fishAudioVendor.Capabilities.SupportedOutputFormats.Contains("opus"), "Fish Audio vendor exposes Opus output format");
+AssertTrue(fishAudioVendor.DefaultModels.Any(model => model.Id == "s2-pro"), "Fish Audio vendor exposes S2-Pro model header");
+AssertTrue(fishAudioVendor.DefaultVoices.Any(voice => voice.Id == "802e3bc2b27e49c2995d23ef70e6ac89"), "Fish Audio vendor exposes official Energetic Male example voice");
+
 Console.WriteLine("Vendor capabilities registry tests passed.");
 
 var settingsRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Settings.razor");
@@ -1284,6 +1429,7 @@ AssertTrue(settingsMarkup.Contains("vendor.ImportantLinks"), "Settings renders l
 AssertTrue(settingsMarkup.Contains("MIMO_API_KEY"), "Settings explains Xiaomi MiMo credential naming");
 AssertTrue(settingsMarkup.Contains("MINIMAX_API_KEY"), "Settings explains MiniMax credential naming");
 AssertTrue(settingsMarkup.Contains("ELEVENLABS_API_KEY"), "Settings explains ElevenLabs credential naming");
+AssertTrue(settingsMarkup.Contains("FISH_AUDIO_API_KEY"), "Settings explains Fish Audio credential naming");
 
 var homeRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Home.razor");
 var homeMarkup = await File.ReadAllTextAsync(homeRazorPath);
@@ -1298,6 +1444,7 @@ AssertTrue(homeMarkup.Contains("assets/vendor-icons/google.ico"), "Home page use
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/openai.svg"), "Home page uses local OpenAI brand icon");
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/minimax.ico"), "Home page uses local MiniMax brand icon");
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/elevenlabs.svg"), "Home page uses local ElevenLabs brand icon");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/fish_audio.svg"), "Home page uses local Fish Audio brand icon");
 
 var vendorIconRoot = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "assets", "vendor-icons");
 foreach (var iconFile in new[]
@@ -1311,7 +1458,8 @@ foreach (var iconFile in new[]
     "google.ico",
     "openai.svg",
     "minimax.ico",
-    "elevenlabs.svg"
+    "elevenlabs.svg",
+    "fish_audio.svg"
 })
 {
     var iconPath = Path.Combine(vendorIconRoot, iconFile);

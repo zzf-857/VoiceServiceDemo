@@ -261,6 +261,60 @@ public static class VendorRegistry
         // ===================== 海外厂商 =====================
         new VendorConfig
         {
+            Id = "fish_audio",
+            Name = "Fish Audio",
+            Description = "Fish Audio 多语言语音合成服务，支持 S2-Pro 模型、公共音色库和声音克隆工作流。",
+            IconName = "sparkles",
+            ApiBaseUrl = "https://api.fish.audio/v1/tts",
+            DocumentationUrl = "https://docs.fish.audio/api-reference/endpoint/openapi-v1/text-to-speech",
+            ImportantLinks = new()
+            {
+                new VendorLink
+                {
+                    Label = "API Key 管理",
+                    Url = "https://fish.audio/go-api/api-keys",
+                    Description = "创建或管理 FISH_AUDIO_API_KEY"
+                },
+                new VendorLink
+                {
+                    Label = "TTS 接口文档",
+                    Url = "https://docs.fish.audio/api-reference/endpoint/openapi-v1/text-to-speech",
+                    Description = "查看 /v1/tts 语音生成接口"
+                },
+                new VendorLink
+                {
+                    Label = "模型列表 API",
+                    Url = "https://docs.fish.audio/api-reference/endpoint/model/list-models",
+                    Description = "查看 /model 在线音色模型列表接口"
+                },
+                new VendorLink
+                {
+                    Label = "公共音色库",
+                    Url = "https://fish.audio/discover",
+                    Description = "浏览可作为 reference_id 使用的公开音色模型"
+                }
+            },
+            Capabilities = new VendorCapabilities
+            {
+                SupportedOutputFormats = new() { "mp3", "wav", "pcm", "opus" }
+            },
+            SpeedDef = new TtsParameterDef { Min = 0.5, Max = 2.0, Default = 1.0, Step = 0.05 },
+            VolumeDef = new TtsParameterDef { Min = -20.0, Max = 20.0, Default = 0.0, Step = 1.0 },
+            SupportsModelFetch = false,
+            SupportsVoiceFetch = true,
+            DefaultModels = new()
+            {
+                new VoiceModel { Id = "s2-pro", Name = "Fish Audio S2-Pro" },
+                new VoiceModel { Id = "s2.1-pro", Name = "Fish Audio S2.1-Pro" }
+            },
+            DefaultVoices = new()
+            {
+                new VoiceOption { Id = "802e3bc2b27e49c2995d23ef70e6ac89", Name = "Energetic Male", Gender = "男", Language = "多语言", Categories = new List<string> { "官方示例", "公共音色" } },
+                new VoiceOption { Id = "ca3007f96ae7499ab87d27ea3599956a", Name = "E-Girl Voice", Gender = "女", Language = "多语言", Categories = new List<string> { "官方示例", "公共音色" } }
+            }
+        },
+        new VendorConfig
+        {
             Id = "elevenlabs",
             Name = "ElevenLabs",
             Description = "ElevenLabs 高自然度多语言语音合成服务，支持在线音色库和多种音频输出格式。",

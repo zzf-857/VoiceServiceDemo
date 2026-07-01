@@ -8,6 +8,17 @@
 
 当前项目已经具备“选择厂商 -> 配置凭证 -> 选择音色 -> 生成播放”的主流程，但距离成熟的 TTS 生产/测试工具还有明显差距。最大短板不是界面是否能点通，而是厂商能力抽象还不够完整：音色库、模型、语言、情感、SSML、采样率、音频格式、长文本、试听、批量生成、历史管理和错误诊断都还没有形成统一的能力模型。
 
+## 2026-07-01 迭代记录
+
+- [x] **接入 Fish Audio TTS HTTP 生成与在线音色模型库**
+  - 已完成：新增 `FishAudioTtsProvider`，按官方接口调用 `POST https://api.fish.audio/v1/tts`，使用 `Authorization: Bearer <token>` 鉴权，并按官方要求通过 `model` 请求头选择 `s2-pro` / `s2.1-pro` 等模型。
+  - 已完成：Fish Audio 请求体接入 `text`、可选 `reference_id`、`format`、`mp3_bitrate`、`opus_bitrate`、`latency`、`normalize`、`temperature`、`top_p` 和 `prosody.speed/volume/normalize_loudness`，并将返回音频字节直接落盘。
+  - 已完成：Fish Audio 注册表新增 `s2-pro`、`s2.1-pro` 模型，预置官方示例音色 `Energetic Male`、`E-Girl Voice`，并声明 `mp3` / `wav` / `pcm` / `opus` 输出格式。
+  - 已完成：接入 `GET https://api.fish.audio/model` 在线模型/音色库刷新，解析 `_id`、`title`、`tags`、`languages`、`visibility` 和 `samples.audio` 为桌面端 `VoiceOption`。
+  - 已完成：Settings 增加 `FISH_AUDIO_API_KEY` 凭证文案，首页增加 Fish Audio 本地品牌图标。
+  - 已验证：新增自检覆盖 Fish Audio 请求体、输出格式回落、fake HTTP 生成落盘、Bearer 鉴权、`model` 请求头、在线模型解析/拉取、注册表能力和 Settings/Home 标记；自检通过，解决方案构建通过且 0 警告 0 错误。
+  - 关联缺口：继续推进“接入更多厂商 API TTS 生成能力”和 P0-01/P1-07/P2-11；WebSocket 流式生成、多说话人 dialogue、即时 voice cloning、`references` 上传和模型创建/训练状态管理暂未接入，后续需单独扩展高级参数与音色来源面板。
+
 ## 2026-06-09 迭代记录
 
 - [x] **接入 ElevenLabs TTS HTTP 生成与在线音色库**

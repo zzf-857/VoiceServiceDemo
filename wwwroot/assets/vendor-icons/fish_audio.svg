@@ -1,0 +1,10 @@
+<svg width="500" height="500" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Fish Audio">
+<rect width="500" height="500" rx="100" fill="#050505"/>
+<path d="M126 254C159 203 205 177 263 177C319 177 368 203 410 254C368 305 319 331 263 331C205 331 159 305 126 254Z" fill="#FFFFFF"/>
+<path d="M90 254C105 238 120 225 136 215C126 239 126 269 136 293C120 283 105 270 90 254Z" fill="#FFFFFF"/>
+<circle cx="318" cy="248" r="20" fill="#050505"/>
+<path d="M202 244C229 227 257 227 284 244" stroke="#050505" stroke-width="18" stroke-linecap="round"/>
+<path d="M202 278C229 295 257 295 284 278" stroke="#050505" stroke-width="18" stroke-linecap="round"/>
+<path d="M154 377H346" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/>
+<path d="M180 408H320" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/>
+</svg>
