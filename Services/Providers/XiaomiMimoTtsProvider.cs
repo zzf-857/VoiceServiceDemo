@@ -6,7 +6,7 @@ using VoiceServiceDemo.Models;
 
 namespace VoiceServiceDemo.Services.Providers;
 
-public sealed class XiaomiMimoTtsProvider
+public sealed class XiaomiMimoTtsProvider : ITtsProvider
 {
     private const string Endpoint = "https://api.xiaomimimo.com/v1/chat/completions";
     private const string DefaultModel = "mimo-v2.5-tts";
@@ -20,21 +20,30 @@ public sealed class XiaomiMimoTtsProvider
         _settingsService = settingsService;
     }
 
-    public Task<(bool Success, string Message)> TestConnectivityAsync(string apiKey)
+    public string VendorId => "xiaomi_mimo";
+
+    public Task<(bool Success, string Message)> TestConnectivityAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(string.IsNullOrWhiteSpace(apiKey)
             ? (false, "小米 MiMo API Key 为空，请先填写。")
             : (true, "小米 MiMo API Key 已填写。连通性将在生成时验证，测试按钮不会发起语音合成以避免消耗额度。"));
     }
 
-    public async Task<TtsResult> GenerateAsync(TtsRequest request, string apiKey)
+    public async Task<TtsResult> GenerateAsync(
+        TtsRequest request,
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, Endpoint);
         httpRequest.Headers.Add("api-key", apiKey);
         httpRequest.Content = new StringContent(BuildChatCompletionRequestJson(request), Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.SendAsync(httpRequest);
-        var json = await response.Content.ReadAsStringAsync();
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
             return new TtsResult { Success = false, ErrorMessage = $"小米 MiMo API 错误 ({response.StatusCode}): {json}" };
@@ -43,7 +52,7 @@ public sealed class XiaomiMimoTtsProvider
             return new TtsResult { Success = false, ErrorMessage = "小米 MiMo 返回结果无法解析音频数据: " + json };
 
         var filePath = GetOutputFilePath(request.OutputFormat);
-        await File.WriteAllBytesAsync(filePath, audioBytes);
+        await File.WriteAllBytesAsync(filePath, audioBytes, cancellationToken);
 
         var vendor = VendorRegistry.GetById("xiaomi_mimo");
         return new TtsResult

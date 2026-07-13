@@ -7,7 +7,7 @@ using VoiceServiceDemo.Models;
 
 namespace VoiceServiceDemo.Services.Providers;
 
-public sealed class FishAudioTtsProvider
+public sealed class FishAudioTtsProvider : ITtsProvider, IVoiceCatalogProvider
 {
     private const string TtsEndpoint = "https://api.fish.audio/v1/tts";
     private const string ModelsEndpoint = "https://api.fish.audio/model?page_size=50&page_number=1&sort_by=task_count";
@@ -22,23 +22,32 @@ public sealed class FishAudioTtsProvider
         _settingsService = settingsService;
     }
 
-    public Task<(bool Success, string Message)> TestConnectivityAsync(string apiKey)
+    public string VendorId => "fish_audio";
+
+    public Task<(bool Success, string Message)> TestConnectivityAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(string.IsNullOrWhiteSpace(apiKey)
             ? (false, "Fish Audio API Key 为空，请先填写。")
             : (true, "Fish Audio API Key 已填写。连通性将在生成或刷新音色库时验证，测试按钮不会发起语音合成以避免消耗额度。"));
     }
 
-    public async Task<TtsResult> GenerateAsync(TtsRequest request, string apiKey)
+    public async Task<TtsResult> GenerateAsync(
+        TtsRequest request,
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var outputFormat = NormalizeOutputFormat(request.OutputFormat);
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, TtsEndpoint);
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
         httpRequest.Headers.Add("model", NormalizeModelId(request.ModelId));
         httpRequest.Content = new StringContent(BuildTtsRequestJson(request), Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.SendAsync(httpRequest);
-        var audioBytes = await response.Content.ReadAsByteArrayAsync();
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        var audioBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -50,7 +59,7 @@ public sealed class FishAudioTtsProvider
             return new TtsResult { Success = false, ErrorMessage = "Fish Audio 返回了空音频数据。" };
 
         var filePath = GetOutputFilePath(outputFormat);
-        await File.WriteAllBytesAsync(filePath, audioBytes);
+        await File.WriteAllBytesAsync(filePath, audioBytes, cancellationToken);
 
         var vendor = VendorRegistry.GetById("fish_audio");
         return new TtsResult
@@ -64,16 +73,18 @@ public sealed class FishAudioTtsProvider
         };
     }
 
-    public async Task<List<VoiceOption>> FetchVoicesAsync(string apiKey)
+    public async Task<List<VoiceOption>> FetchVoicesAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var httpRequest = new HttpRequestMessage(HttpMethod.Get, ModelsEndpoint);
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
 
-        var response = await _httpClient.SendAsync(httpRequest);
-        if (!response.IsSuccessStatusCode)
-            return new List<VoiceOption>();
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        response.EnsureSuccessStatusCode();
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
         return ParseModelsJson(json);
     }
 

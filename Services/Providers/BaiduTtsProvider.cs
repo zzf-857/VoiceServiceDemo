@@ -5,7 +5,7 @@ using VoiceServiceDemo.Models;
 
 namespace VoiceServiceDemo.Services.Providers;
 
-public sealed class BaiduTtsProvider
+public sealed class BaiduTtsProvider : ITtsProvider
 {
     private readonly HttpClient _httpClient;
     private readonly SettingsService _settingsService;
@@ -16,13 +16,18 @@ public sealed class BaiduTtsProvider
         _settingsService = settingsService;
     }
 
-    public async Task<(bool Success, string Message)> TestConnectivityAsync(string apiKey)
+    public string VendorId => "baidu";
+
+    public async Task<(bool Success, string Message)> TestConnectivityAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var keys = ParseCredentials(apiKey);
         if (keys == null)
             return (false, "格式错误，应为: api_key|secret_key");
 
-        var tokenJson = await RequestAccessTokenAsync(keys.Value.ApiKey, keys.Value.SecretKey);
+        var tokenJson = await RequestAccessTokenAsync(keys.Value.ApiKey, keys.Value.SecretKey, cancellationToken);
         using var doc = JsonDocument.Parse(tokenJson);
         if (doc.RootElement.TryGetProperty("access_token", out _))
             return (true, "百度 连接成功 ✓");
@@ -30,27 +35,31 @@ public sealed class BaiduTtsProvider
         return (false, "access_token 获取失败，请检查 Key");
     }
 
-    public async Task<TtsResult> GenerateAsync(TtsRequest request, string apiKey)
+    public async Task<TtsResult> GenerateAsync(
+        TtsRequest request,
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var keys = ParseCredentials(apiKey);
         if (keys == null)
             return new TtsResult { Success = false, ErrorMessage = "百度 API Key 格式应为: api_key|secret_key" };
 
-        var tokenJson = await RequestAccessTokenAsync(keys.Value.ApiKey, keys.Value.SecretKey);
+        var tokenJson = await RequestAccessTokenAsync(keys.Value.ApiKey, keys.Value.SecretKey, cancellationToken);
         using var tokenDoc = JsonDocument.Parse(tokenJson);
         if (!tokenDoc.RootElement.TryGetProperty("access_token", out var tokenElem))
             return new TtsResult { Success = false, ErrorMessage = "百度 access_token 获取失败: " + tokenJson };
 
-        var response = await _httpClient.GetAsync(BuildSynthesisUrl(request, tokenElem.GetString() ?? ""));
+        var response = await _httpClient.GetAsync(BuildSynthesisUrl(request, tokenElem.GetString() ?? ""), cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            var err = await response.Content.ReadAsStringAsync();
+            var err = await response.Content.ReadAsStringAsync(cancellationToken);
             return new TtsResult { Success = false, ErrorMessage = $"百度 API 错误 ({response.StatusCode}): {err}" };
         }
 
-        var audioBytes = await response.Content.ReadAsByteArrayAsync();
+        var audioBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
         var filePath = GetOutputFilePath(request.OutputFormat);
-        await File.WriteAllBytesAsync(filePath, audioBytes);
+        await File.WriteAllBytesAsync(filePath, audioBytes, cancellationToken);
 
         var vendor = VendorRegistry.GetById("baidu");
         return new TtsResult
@@ -80,14 +89,17 @@ public sealed class BaiduTtsProvider
                $"&aue={GetAue(request.OutputFormat)}";
     }
 
-    private async Task<string> RequestAccessTokenAsync(string apiKey, string secretKey)
+    private async Task<string> RequestAccessTokenAsync(
+        string apiKey,
+        string secretKey,
+        CancellationToken cancellationToken)
     {
         var tokenUrl = "https://aip.baidubce.com/oauth/2.0/token" +
                        "?grant_type=client_credentials" +
                        $"&client_id={Uri.EscapeDataString(apiKey)}" +
                        $"&client_secret={Uri.EscapeDataString(secretKey)}";
-        var tokenResp = await _httpClient.PostAsync(tokenUrl, null);
-        return await tokenResp.Content.ReadAsStringAsync();
+        var tokenResp = await _httpClient.PostAsync(tokenUrl, null, cancellationToken);
+        return await tokenResp.Content.ReadAsStringAsync(cancellationToken);
     }
 
     public static string GetOutputFormatExtension(string outputFormat) =>

@@ -6,7 +6,7 @@ using VoiceServiceDemo.Models;
 
 namespace VoiceServiceDemo.Services.Providers;
 
-public sealed class AliyunTtsProvider
+public sealed class AliyunTtsProvider : ITtsProvider, IVoiceCatalogProvider
 {
     private const string TextToAudioEndpoint = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2audio/generation";
     private const string QwenTtsEndpoint = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
@@ -21,14 +21,19 @@ public sealed class AliyunTtsProvider
         _settingsService = settingsService;
     }
 
-    public async Task<(bool Success, string Message)> TestConnectivityAsync(string apiKey)
+    public string VendorId => "aliyun";
+
+    public async Task<(bool Success, string Message)> TestConnectivityAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var req = new HttpRequestMessage(HttpMethod.Post, TextToAudioEndpoint);
         req.Headers.Add("Authorization", $"Bearer {apiKey}");
         req.Content = new StringContent("{}", Encoding.UTF8, "application/json");
 
-        var resp = await _httpClient.SendAsync(req);
-        _ = await resp.Content.ReadAsStringAsync();
+        var resp = await _httpClient.SendAsync(req, cancellationToken);
+        _ = await resp.Content.ReadAsStringAsync(cancellationToken);
 
         if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized || resp.StatusCode == System.Net.HttpStatusCode.Forbidden)
             return (false, $"鉴权失败 ({resp.StatusCode})");
@@ -36,8 +41,11 @@ public sealed class AliyunTtsProvider
         return (true, "阿里云 连接成功 ✓");
     }
 
-    public async Task<List<VoiceOption>> FetchVoicesAsync()
+    public async Task<List<VoiceOption>> FetchVoicesAsync(
+        string apiKey = "",
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var options = new List<VoiceOption>();
         try
         {
@@ -45,9 +53,9 @@ public sealed class AliyunTtsProvider
             if (!File.Exists(jsonPath))
                 jsonPath = Path.Combine(Directory.GetCurrentDirectory(), "aliyun_voices_raw.json");
             if (!File.Exists(jsonPath))
-                return options;
+                throw new FileNotFoundException("找不到阿里云本地音色库 aliyun_voices_raw.json。", jsonPath);
 
-            var json = await File.ReadAllTextAsync(jsonPath);
+            var json = await File.ReadAllTextAsync(jsonPath, cancellationToken);
             using var doc = JsonDocument.Parse(json);
 
             if (doc.RootElement.TryGetProperty("data", out var dataWrapper) &&
@@ -68,7 +76,7 @@ public sealed class AliyunTtsProvider
                 }
                 else
                 {
-                    return options;
+                    throw new InvalidDataException("阿里云本地音色库缺少 voiceConfigList 数组。");
                 }
 
                 foreach (var item in voiceArray.EnumerateArray())
@@ -81,16 +89,30 @@ public sealed class AliyunTtsProvider
                         ParseVoiceConfig(cfg, options);
                 }
             }
+            else
+            {
+                throw new InvalidDataException("阿里云本地音色库结构无法识别。");
+            }
 
-            try { await File.WriteAllTextAsync(Path.Combine(_settingsService.Settings.OutputDirectory, "aliyun_voices_debug.txt"), $"Loaded {options.Count} Aliyun voices from local JSON"); } catch { }
+            try { await File.WriteAllTextAsync(Path.Combine(_settingsService.Settings.OutputDirectory, "aliyun_voices_debug.txt"), $"Loaded {options.Count} Aliyun voices from local JSON", cancellationToken); }
+            catch (OperationCanceledException) { throw; }
+            catch { }
         }
-        catch { }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) when (ex is not InvalidDataException)
+        {
+            throw new InvalidDataException("读取阿里云本地音色库失败。", ex);
+        }
 
         return options;
     }
 
-    public async Task<TtsResult> GenerateAsync(TtsRequest request, string apiKey)
+    public async Task<TtsResult> GenerateAsync(
+        TtsRequest request,
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         HttpRequestMessage httpRequest;
 
         if (IsQwen3Model(request.ModelId))
@@ -112,36 +134,37 @@ public sealed class AliyunTtsProvider
             httpRequest.Content = new StringContent(BuildGenerateRequestJson(request), Encoding.UTF8, "application/json");
         }
 
-        var response = await _httpClient.SendAsync(httpRequest);
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            var err = await response.Content.ReadAsStringAsync();
+            var err = await response.Content.ReadAsStringAsync(cancellationToken);
             return new TtsResult { Success = false, ErrorMessage = $"阿里云 API 错误 ({response.StatusCode}): {err}" };
         }
 
         if (IsQwen3Model(request.ModelId) || IsCosyVoiceSpeechSynthesizerModel(request.ModelId))
         {
-            var jsonStr = await response.Content.ReadAsStringAsync();
+            var jsonStr = await response.Content.ReadAsStringAsync(cancellationToken);
             try
             {
                 if (TryExtractAudioBytes(jsonStr, out var inlineAudioBytes))
-                    return await SaveAudioBytesAsync(inlineAudioBytes, request);
+                    return await SaveAudioBytesAsync(inlineAudioBytes, request, cancellationToken);
 
                 var audioUrl = TryExtractAudioUrl(jsonStr);
 
                 if (string.IsNullOrEmpty(audioUrl))
                     return new TtsResult { Success = false, ErrorMessage = "阿里云返回的音频 URL 为空" };
 
-                var audioBytes = await _httpClient.GetByteArrayAsync(audioUrl);
-                return await SaveAudioBytesAsync(audioBytes, request);
+                var audioBytes = await _httpClient.GetByteArrayAsync(audioUrl, cancellationToken);
+                return await SaveAudioBytesAsync(audioBytes, request, cancellationToken);
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
                 return new TtsResult { Success = false, ErrorMessage = $"阿里云响应解析失败: {ex.Message}\n原始响应: {jsonStr}" };
             }
         }
 
-        return await SaveAudioResponseAsync(response, request);
+        return await SaveAudioResponseAsync(response, request, cancellationToken);
     }
 
     public static string BuildGenerateRequestJson(TtsRequest request)
@@ -276,16 +299,22 @@ public sealed class AliyunTtsProvider
         });
     }
 
-    private async Task<TtsResult> SaveAudioResponseAsync(HttpResponseMessage response, TtsRequest request)
+    private async Task<TtsResult> SaveAudioResponseAsync(
+        HttpResponseMessage response,
+        TtsRequest request,
+        CancellationToken cancellationToken)
     {
-        var audioBytes = await response.Content.ReadAsByteArrayAsync();
-        return await SaveAudioBytesAsync(audioBytes, request);
+        var audioBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        return await SaveAudioBytesAsync(audioBytes, request, cancellationToken);
     }
 
-    private async Task<TtsResult> SaveAudioBytesAsync(byte[] audioBytes, TtsRequest request)
+    private async Task<TtsResult> SaveAudioBytesAsync(
+        byte[] audioBytes,
+        TtsRequest request,
+        CancellationToken cancellationToken)
     {
         var filePath = GetOutputFilePath(request.ModelId, request.OutputFormat);
-        await File.WriteAllBytesAsync(filePath, audioBytes);
+        await File.WriteAllBytesAsync(filePath, audioBytes, cancellationToken);
 
         var vendor = VendorRegistry.GetById("aliyun");
         return new TtsResult

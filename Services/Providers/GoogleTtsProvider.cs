@@ -6,7 +6,7 @@ using VoiceServiceDemo.Models;
 
 namespace VoiceServiceDemo.Services.Providers;
 
-public sealed class GoogleTtsProvider
+public sealed class GoogleTtsProvider : ITtsProvider, IVoiceCatalogProvider
 {
     private readonly HttpClient _httpClient;
     private readonly SettingsService _settingsService;
@@ -17,23 +17,32 @@ public sealed class GoogleTtsProvider
         _settingsService = settingsService;
     }
 
-    public async Task<(bool Success, string Message)> TestConnectivityAsync(string apiKey)
+    public string VendorId => "google";
+
+    public async Task<(bool Success, string Message)> TestConnectivityAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var url = $"https://texttospeech.googleapis.com/v1/voices?key={apiKey}";
-        var resp = await _httpClient.GetAsync(url);
+        var resp = await _httpClient.GetAsync(url, cancellationToken);
         return resp.IsSuccessStatusCode
             ? (true, "Google 连接成功 ✓")
             : (false, $"鉴权失败 ({resp.StatusCode})");
     }
 
-    public async Task<TtsResult> GenerateAsync(TtsRequest request, string apiKey)
+    public async Task<TtsResult> GenerateAsync(
+        TtsRequest request,
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var url = $"https://texttospeech.googleapis.com/v1/text:synthesize?key={apiKey}";
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
         httpRequest.Content = new StringContent(BuildSynthesizeRequestJson(request), Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.SendAsync(httpRequest);
-        var respJson = await response.Content.ReadAsStringAsync();
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        var respJson = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
             return new TtsResult { Success = false, ErrorMessage = $"Google API 错误 ({response.StatusCode}): {respJson}" };
@@ -43,7 +52,7 @@ public sealed class GoogleTtsProvider
         {
             var audioBytes = Convert.FromBase64String(audioBase64.GetString()!);
             var filePath = GetOutputFilePath(request.OutputFormat);
-            await File.WriteAllBytesAsync(filePath, audioBytes);
+            await File.WriteAllBytesAsync(filePath, audioBytes, cancellationToken);
 
             var vendor = VendorRegistry.GetById("google");
             return new TtsResult
@@ -60,14 +69,16 @@ public sealed class GoogleTtsProvider
         return new TtsResult { Success = false, ErrorMessage = "Google 返回结果无效: " + respJson };
     }
 
-    public async Task<List<VoiceOption>> FetchVoicesAsync(string apiKey)
+    public async Task<List<VoiceOption>> FetchVoicesAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var url = $"https://texttospeech.googleapis.com/v1/voices?key={apiKey}";
-        var response = await _httpClient.GetAsync(url);
-        if (!response.IsSuccessStatusCode)
-            return new List<VoiceOption>();
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        response.EnsureSuccessStatusCode();
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
         return ParseVoicesJson(json);
     }
 

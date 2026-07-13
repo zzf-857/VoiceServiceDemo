@@ -10,6 +10,13 @@
 
 ## 2026-07-14 迭代记录
 
+- [x] **统一桌面端 TTS Provider 注册与取消传播**
+  - 已完成：新增 `ITtsProvider`、`IVoiceCatalogProvider` 和大小写不敏感的 `TtsProviderRegistry`，12 个桌面厂商全部通过唯一 ID 注册；连通性、音色刷新和生成不再维护三组厂商 switch。
+  - 已完成：新增 `VoiceCatalogResult`，明确区分未知厂商、厂商不支持在线刷新、未配置凭证和上游刷新失败；旧的 `FetchVoicesAsync` 保留为兼容包装，不再由核心路由静默吞掉错误。
+  - 已完成：12 个 Provider 的公开异步方法接收 `CancellationToken`，并继续传给 HTTP、文件读写、火山流读取和长文本轮询延时；`TtsService` 不吞掉取消异常，为本地 API 的请求中止和软件退出打好基础。
+  - 已验证：按 TDD 先加入注册覆盖、重复 ID、未知厂商错误和真实 `HttpMessageHandler` 取消探针测试，初次编译因缺少 `ITtsProvider` 报 `CS0246`；实现后全部桌面自检通过，12 个既有 Provider fake HTTP 回归保持通过。
+  - 关联缺口：推进 P2-10、P2-11 和 P3-06；桌面端 Provider 路由已统一，但旧 `VoiceServiceMcp` 仍是独立实现，因此暂不把 MCP 分叉项标记完成。
+
 - [x] **修复桌面端并发生成覆盖音频文件**
   - 已完成：新增统一的 `AudioOutputPath.Reserve`，文件名使用毫秒时间戳、4 字节密码学随机后缀，并通过 `FileMode.CreateNew` 原子预留；同时规范厂商标识和扩展名。
   - 已完成：阿里云、Azure、百度、Deepgram、ElevenLabs、Fish Audio、Google、火山、MiniMax、OpenAI、腾讯和小米 MiMo 共 12 个桌面端 TTS Provider 已统一接入，继续复用各 Provider 原有的实际格式到扩展名映射；本次未改动 `VoiceServiceMcp`。

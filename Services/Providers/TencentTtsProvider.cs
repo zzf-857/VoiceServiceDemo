@@ -8,7 +8,7 @@ using VoiceServiceDemo.Services;
 
 namespace VoiceServiceDemo.Services.Providers;
 
-public sealed class TencentTtsProvider
+public sealed class TencentTtsProvider : ITtsProvider, IVoiceCatalogProvider
 {
     private readonly HttpClient _httpClient;
     private readonly SettingsService _settingsService;
@@ -19,8 +19,13 @@ public sealed class TencentTtsProvider
         _settingsService = settingsService;
     }
 
-    public async Task<(bool Success, string Message)> TestConnectivityAsync(string apiKey)
+    public string VendorId => "tencent";
+
+    public async Task<(bool Success, string Message)> TestConnectivityAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var keys = apiKey.Split('|');
         if (keys.Length < 2)
             return (false, "格式错误，应为: SecretId|SecretKey");
@@ -38,8 +43,8 @@ public sealed class TencentTtsProvider
 
         TencentSigner.SignRequest(req, secretId, secretKey, "tts", bodyBytes);
 
-        var resp = await _httpClient.SendAsync(req);
-        var json = await resp.Content.ReadAsStringAsync();
+        var resp = await _httpClient.SendAsync(req, cancellationToken);
+        var json = await resp.Content.ReadAsStringAsync(cancellationToken);
         if (json.Contains("AuthFailure", StringComparison.OrdinalIgnoreCase) ||
             json.Contains("UnauthorizedOperation", StringComparison.OrdinalIgnoreCase))
             return (false, "鉴权失败，请检查 SecretId/SecretKey");
@@ -47,10 +52,14 @@ public sealed class TencentTtsProvider
         return (true, "腾讯云 连接成功 ✓");
     }
 
-    public async Task<List<VoiceOption>> FetchVoicesAsync(string apiKey)
+    public async Task<List<VoiceOption>> FetchVoicesAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var keys = apiKey.Split('|');
-        if (keys.Length < 2) return new List<VoiceOption>();
+        if (keys.Length < 2)
+            throw new InvalidOperationException("腾讯云 Key 格式应为: SecretId|SecretKey");
 
         var secretId = keys.Length >= 3 ? keys[1] : keys[0];
         var secretKey = keys.Length >= 3 ? keys[2] : keys[1];
@@ -65,86 +74,83 @@ public sealed class TencentTtsProvider
 
         TencentSigner.SignRequest(req, secretId, secretKey, "tts", bodyBytes);
 
-        var resp = await _httpClient.SendAsync(req);
-        var json = await resp.Content.ReadAsStringAsync();
+        var resp = await _httpClient.SendAsync(req, cancellationToken);
+        var json = await resp.Content.ReadAsStringAsync(cancellationToken);
 
-        try { await File.WriteAllTextAsync(Path.Combine(_settingsService.Settings.OutputDirectory, "tencent_voices_debug.json"), json); } catch { }
-
-        if (!resp.IsSuccessStatusCode)
-            return new List<VoiceOption>();
-
-        try
-        {
-            var errDoc = JsonDocument.Parse(json);
-            if (errDoc.RootElement.TryGetProperty("Response", out var errResp) &&
-                errResp.TryGetProperty("Error", out _))
-                return new List<VoiceOption>();
-        }
+        try { await File.WriteAllTextAsync(Path.Combine(_settingsService.Settings.OutputDirectory, "tencent_voices_debug.json"), json, cancellationToken); }
+        catch (OperationCanceledException) { throw; }
         catch { }
+
+        resp.EnsureSuccessStatusCode();
 
         var options = new List<VoiceOption>();
-        try
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("Response", out var response))
+            throw new InvalidDataException("腾讯云音色响应缺少 Response。");
+        if (response.TryGetProperty("Error", out var error))
+            throw new InvalidOperationException($"腾讯云音色接口返回业务错误: {error}");
+        if (!response.TryGetProperty("CategoryVoiceList", out var categoryList))
+            return options;
+        if (categoryList.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("腾讯云音色响应的 CategoryVoiceList 不是数组。");
+
+        foreach (var category in categoryList.EnumerateArray())
         {
-            var doc = JsonDocument.Parse(json);
-            if (!doc.RootElement.TryGetProperty("Response", out var response)) return options;
-            if (!response.TryGetProperty("CategoryVoiceList", out var categoryList)) return options;
-            if (categoryList.ValueKind != JsonValueKind.Array) return options;
+            var categoryName = TryGetStr(category, "CategoryName") ?? "";
+            if (!category.TryGetProperty("VoiceList", out var voiceList)) continue;
+            if (voiceList.ValueKind != JsonValueKind.Array) continue;
 
-            foreach (var category in categoryList.EnumerateArray())
+            foreach (var voice in voiceList.EnumerateArray())
             {
-                var categoryName = TryGetStr(category, "CategoryName") ?? "";
-                if (!category.TryGetProperty("VoiceList", out var voiceList)) continue;
-                if (voiceList.ValueKind != JsonValueKind.Array) continue;
-
-                foreach (var voice in voiceList.EnumerateArray())
+                var voiceType = "";
+                if (voice.TryGetProperty("VoiceType", out var vt))
                 {
-                    var voiceType = "";
-                    if (voice.TryGetProperty("VoiceType", out var vt))
-                    {
-                        voiceType = vt.ValueKind == JsonValueKind.Number
-                            ? vt.GetInt64().ToString()
-                            : vt.GetString() ?? "";
-                    }
-                    if (string.IsNullOrEmpty(voiceType)) continue;
-
-                    var voiceName = TryGetStr(voice, "VoiceName") ?? voiceType;
-                    var voiceDesc = TryGetStr(voice, "VoiceDesc") ?? "";
-                    var displayName = string.IsNullOrEmpty(voiceDesc)
-                        ? voiceName
-                        : $"{voiceName} ({voiceDesc})";
-
-                    var gender = TryGetStr(voice, "VoiceGender") ?? "";
-                    gender = gender switch
-                    {
-                        "female" => "女",
-                        "male" => "男",
-                        "boy" => "男童",
-                        "girl" => "女童",
-                        _ => gender
-                    };
-
-                    var sampleUrl = TryGetStr(voice, "VoiceAudio");
-                    var language = categoryName == "外语" ? "英文" : categoryName == "方言" ? "方言" : "中文";
-
-                    options.Add(new VoiceOption
-                    {
-                        Id = voiceType,
-                        Name = displayName,
-                        Gender = gender,
-                        Language = language,
-                        SampleUrl = sampleUrl,
-                        Categories = new List<string> { categoryName }
-                    });
+                    voiceType = vt.ValueKind == JsonValueKind.Number
+                        ? vt.GetInt64().ToString()
+                        : vt.GetString() ?? "";
                 }
+                if (string.IsNullOrEmpty(voiceType)) continue;
+
+                var voiceName = TryGetStr(voice, "VoiceName") ?? voiceType;
+                var voiceDesc = TryGetStr(voice, "VoiceDesc") ?? "";
+                var displayName = string.IsNullOrEmpty(voiceDesc)
+                    ? voiceName
+                    : $"{voiceName} ({voiceDesc})";
+
+                var gender = TryGetStr(voice, "VoiceGender") ?? "";
+                gender = gender switch
+                {
+                    "female" => "女",
+                    "male" => "男",
+                    "boy" => "男童",
+                    "girl" => "女童",
+                    _ => gender
+                };
+
+                var sampleUrl = TryGetStr(voice, "VoiceAudio");
+                var language = categoryName == "外语" ? "英文" : categoryName == "方言" ? "方言" : "中文";
+
+                options.Add(new VoiceOption
+                {
+                    Id = voiceType,
+                    Name = displayName,
+                    Gender = gender,
+                    Language = language,
+                    SampleUrl = sampleUrl,
+                    Categories = new List<string> { categoryName }
+                });
             }
         }
-        catch { }
 
         return options;
     }
 
-    public async Task<TtsResult> GenerateAsync(TtsRequest request, string apiKey)
+    public async Task<TtsResult> GenerateAsync(
+        TtsRequest request,
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var keys = apiKey.Split('|');
         if (keys.Length < 2)
             return new TtsResult { Success = false, ErrorMessage = "腾讯云 Key 格式应为: SecretId|SecretKey" };
@@ -162,8 +168,8 @@ public sealed class TencentTtsProvider
 
         TencentSigner.SignRequest(httpRequest, secretId, secretKey, "tts", bodyBytes);
 
-        var response = await _httpClient.SendAsync(httpRequest);
-        var respJson = await response.Content.ReadAsStringAsync();
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        var respJson = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
             return new TtsResult { Success = false, ErrorMessage = $"腾讯云 API 错误 ({response.StatusCode}): {respJson}" };
@@ -181,7 +187,7 @@ public sealed class TencentTtsProvider
             if (respObj.TryGetProperty("Audio", out var audioBase64) && audioBase64.ValueKind == JsonValueKind.String)
             {
                 var audioBytes = Convert.FromBase64String(audioBase64.GetString()!);
-                return await SaveAudioBytesAsync(audioBytes, request);
+                return await SaveAudioBytesAsync(audioBytes, request, cancellationToken);
             }
         }
 
@@ -210,10 +216,13 @@ public sealed class TencentTtsProvider
         return JsonSerializer.Serialize(body);
     }
 
-    private async Task<TtsResult> SaveAudioBytesAsync(byte[] audioBytes, TtsRequest request)
+    private async Task<TtsResult> SaveAudioBytesAsync(
+        byte[] audioBytes,
+        TtsRequest request,
+        CancellationToken cancellationToken)
     {
         var filePath = GetOutputFilePath(request.OutputFormat);
-        await File.WriteAllBytesAsync(filePath, audioBytes);
+        await File.WriteAllBytesAsync(filePath, audioBytes, cancellationToken);
 
         var vendor = VendorRegistry.GetById("tencent");
         return new TtsResult

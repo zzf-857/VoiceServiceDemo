@@ -6,7 +6,7 @@ using VoiceServiceDemo.Models;
 
 namespace VoiceServiceDemo.Services.Providers;
 
-public sealed class AzureTtsProvider
+public sealed class AzureTtsProvider : ITtsProvider, IVoiceCatalogProvider
 {
     private readonly HttpClient _httpClient;
     private readonly SettingsService _settingsService;
@@ -17,8 +17,13 @@ public sealed class AzureTtsProvider
         _settingsService = settingsService;
     }
 
-    public async Task<(bool Success, string Message)> TestConnectivityAsync(string apiKey)
+    public string VendorId => "azure";
+
+    public async Task<(bool Success, string Message)> TestConnectivityAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var keys = ParseCredentials(apiKey);
         if (keys == null)
             return (false, "格式错误，应为: subscription_key|region");
@@ -27,32 +32,38 @@ public sealed class AzureTtsProvider
         var req = new HttpRequestMessage(HttpMethod.Post, url);
         req.Headers.Add("Ocp-Apim-Subscription-Key", keys.Value.SubscriptionKey);
         req.Content = new StringContent("", Encoding.UTF8);
-        var resp = await _httpClient.SendAsync(req);
+        var resp = await _httpClient.SendAsync(req, cancellationToken);
         return resp.IsSuccessStatusCode
             ? (true, "Azure 连接成功 ✓")
             : (false, $"鉴权失败 ({resp.StatusCode})");
     }
 
-    public async Task<List<VoiceOption>> FetchVoicesAsync(string apiKey)
+    public async Task<List<VoiceOption>> FetchVoicesAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var keys = ParseCredentials(apiKey);
         if (keys == null)
-            return new List<VoiceOption>();
+            throw new InvalidOperationException("Azure Key 格式应为: subscription_key|region");
 
         var req = new HttpRequestMessage(
             HttpMethod.Get,
             $"https://{keys.Value.Region}.tts.speech.microsoft.com/cognitiveservices/voices/list");
         req.Headers.Add("Ocp-Apim-Subscription-Key", keys.Value.SubscriptionKey);
-        var resp = await _httpClient.SendAsync(req);
-        if (!resp.IsSuccessStatusCode)
-            return new List<VoiceOption>();
+        var resp = await _httpClient.SendAsync(req, cancellationToken);
+        resp.EnsureSuccessStatusCode();
 
-        var json = await resp.Content.ReadAsStringAsync();
+        var json = await resp.Content.ReadAsStringAsync(cancellationToken);
         return ParseVoicesJson(json);
     }
 
-    public async Task<TtsResult> GenerateAsync(TtsRequest request, string apiKey)
+    public async Task<TtsResult> GenerateAsync(
+        TtsRequest request,
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var keys = ParseCredentials(apiKey);
         if (keys == null)
             return new TtsResult { Success = false, ErrorMessage = "Azure Key 格式应为: subscription_key|region (如 xxxxx|eastasia)" };
@@ -65,16 +76,16 @@ public sealed class AzureTtsProvider
         httpRequest.Content = new StringContent(ssml, Encoding.UTF8, "application/ssml+xml");
         httpRequest.Headers.Add("X-Microsoft-OutputFormat", GetOutputFormatHeader(request.OutputFormat));
 
-        var response = await _httpClient.SendAsync(httpRequest);
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            var err = await response.Content.ReadAsStringAsync();
+            var err = await response.Content.ReadAsStringAsync(cancellationToken);
             return new TtsResult { Success = false, ErrorMessage = $"Azure API 错误 ({response.StatusCode}): {err}" };
         }
 
-        var audioBytes = await response.Content.ReadAsByteArrayAsync();
+        var audioBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
         var filePath = GetOutputFilePath(request.OutputFormat);
-        await File.WriteAllBytesAsync(filePath, audioBytes);
+        await File.WriteAllBytesAsync(filePath, audioBytes, cancellationToken);
 
         var vendor = VendorRegistry.GetById("azure");
         return new TtsResult

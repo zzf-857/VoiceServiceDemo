@@ -8,7 +8,7 @@ using VoiceServiceDemo.Models;
 
 namespace VoiceServiceDemo.Services.Providers;
 
-public sealed class DeepgramTtsProvider
+public sealed class DeepgramTtsProvider : ITtsProvider, IVoiceCatalogProvider
 {
     private const string SpeakEndpoint = "https://api.deepgram.com/v1/speak";
     private const string ModelsEndpoint = "https://api.deepgram.com/v1/models";
@@ -23,28 +23,37 @@ public sealed class DeepgramTtsProvider
         _settingsService = settingsService;
     }
 
-    public async Task<(bool Success, string Message)> TestConnectivityAsync(string apiKey)
+    public string VendorId => "deepgram";
+
+    public async Task<(bool Success, string Message)> TestConnectivityAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(apiKey))
             return (false, "Deepgram API Key 为空，请先填写。");
 
         var req = new HttpRequestMessage(HttpMethod.Get, ModelsEndpoint);
         req.Headers.Authorization = new AuthenticationHeaderValue("Token", apiKey.Trim());
-        var resp = await _httpClient.SendAsync(req);
+        var resp = await _httpClient.SendAsync(req, cancellationToken);
 
         return resp.IsSuccessStatusCode
             ? (true, "Deepgram 连接成功，可以刷新 Aura TTS 模型列表。")
             : (false, $"Deepgram 鉴权或模型列表请求失败 ({resp.StatusCode})");
     }
 
-    public async Task<TtsResult> GenerateAsync(TtsRequest request, string apiKey)
+    public async Task<TtsResult> GenerateAsync(
+        TtsRequest request,
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, BuildSpeakUri(request));
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Token", apiKey.Trim());
         httpRequest.Content = new StringContent(BuildSpeakRequestJson(request), Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.SendAsync(httpRequest);
-        var audioBytes = await response.Content.ReadAsByteArrayAsync();
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        var audioBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -57,7 +66,7 @@ public sealed class DeepgramTtsProvider
 
         var outputFormat = NormalizeOutputFormat(request.OutputFormat);
         var filePath = GetOutputFilePath(outputFormat);
-        await File.WriteAllBytesAsync(filePath, audioBytes);
+        await File.WriteAllBytesAsync(filePath, audioBytes, cancellationToken);
 
         var vendor = VendorRegistry.GetById("deepgram");
         var modelId = ResolveModelId(request);
@@ -72,16 +81,18 @@ public sealed class DeepgramTtsProvider
         };
     }
 
-    public async Task<List<VoiceOption>> FetchVoicesAsync(string apiKey)
+    public async Task<List<VoiceOption>> FetchVoicesAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var httpRequest = new HttpRequestMessage(HttpMethod.Get, ModelsEndpoint);
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Token", apiKey.Trim());
 
-        var response = await _httpClient.SendAsync(httpRequest);
-        if (!response.IsSuccessStatusCode)
-            return new List<VoiceOption>();
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        response.EnsureSuccessStatusCode();
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
         return ParseModelsJson(json);
     }
 

@@ -7,7 +7,7 @@ using VoiceServiceDemo.Models;
 
 namespace VoiceServiceDemo.Services.Providers;
 
-public sealed class ElevenLabsTtsProvider
+public sealed class ElevenLabsTtsProvider : ITtsProvider, IVoiceCatalogProvider
 {
     private const string TtsEndpointBase = "https://api.elevenlabs.io/v1/text-to-speech";
     private const string VoicesEndpoint = "https://api.elevenlabs.io/v2/voices";
@@ -23,15 +23,24 @@ public sealed class ElevenLabsTtsProvider
         _settingsService = settingsService;
     }
 
-    public Task<(bool Success, string Message)> TestConnectivityAsync(string apiKey)
+    public string VendorId => "elevenlabs";
+
+    public Task<(bool Success, string Message)> TestConnectivityAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(string.IsNullOrWhiteSpace(apiKey)
             ? (false, "ElevenLabs API Key 为空，请先填写。")
             : (true, "ElevenLabs API Key 已填写。连通性将在生成或刷新音色库时验证，测试按钮不会发起语音合成以避免消耗额度。"));
     }
 
-    public async Task<TtsResult> GenerateAsync(TtsRequest request, string apiKey)
+    public async Task<TtsResult> GenerateAsync(
+        TtsRequest request,
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var voiceId = string.IsNullOrWhiteSpace(request.VoiceId) ? DefaultVoice : request.VoiceId.Trim();
         var outputFormat = NormalizeOutputFormat(request.OutputFormat);
         var endpoint = $"{TtsEndpointBase}/{Uri.EscapeDataString(voiceId)}?output_format={Uri.EscapeDataString(outputFormat)}";
@@ -40,8 +49,8 @@ public sealed class ElevenLabsTtsProvider
         httpRequest.Headers.Add("xi-api-key", apiKey.Trim());
         httpRequest.Content = new StringContent(BuildTextToSpeechRequestJson(request), Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.SendAsync(httpRequest);
-        var audioBytes = await response.Content.ReadAsByteArrayAsync();
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        var audioBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -53,7 +62,7 @@ public sealed class ElevenLabsTtsProvider
             return new TtsResult { Success = false, ErrorMessage = "ElevenLabs 返回了空音频数据。" };
 
         var filePath = GetOutputFilePath(outputFormat);
-        await File.WriteAllBytesAsync(filePath, audioBytes);
+        await File.WriteAllBytesAsync(filePath, audioBytes, cancellationToken);
 
         var vendor = VendorRegistry.GetById("elevenlabs");
         return new TtsResult
@@ -67,16 +76,18 @@ public sealed class ElevenLabsTtsProvider
         };
     }
 
-    public async Task<List<VoiceOption>> FetchVoicesAsync(string apiKey)
+    public async Task<List<VoiceOption>> FetchVoicesAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var httpRequest = new HttpRequestMessage(HttpMethod.Get, VoicesEndpoint);
         httpRequest.Headers.Add("xi-api-key", apiKey.Trim());
 
-        var response = await _httpClient.SendAsync(httpRequest);
-        if (!response.IsSuccessStatusCode)
-            return new List<VoiceOption>();
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        response.EnsureSuccessStatusCode();
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
         return ParseVoicesJson(json);
     }
 

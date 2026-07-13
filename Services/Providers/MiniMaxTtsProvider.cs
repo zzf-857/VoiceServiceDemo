@@ -7,7 +7,7 @@ using VoiceServiceDemo.Models;
 
 namespace VoiceServiceDemo.Services.Providers;
 
-public sealed class MiniMaxTtsProvider
+public sealed class MiniMaxTtsProvider : ITtsProvider, IVoiceCatalogProvider
 {
     private const string T2aEndpoint = "https://api.minimax.io/v1/t2a_v2";
     private const string VoiceEndpoint = "https://api.minimax.io/v1/get_voice";
@@ -23,21 +23,30 @@ public sealed class MiniMaxTtsProvider
         _settingsService = settingsService;
     }
 
-    public Task<(bool Success, string Message)> TestConnectivityAsync(string apiKey)
+    public string VendorId => "minimax";
+
+    public Task<(bool Success, string Message)> TestConnectivityAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(string.IsNullOrWhiteSpace(apiKey)
             ? (false, "MiniMax API Key 为空，请先填写。")
             : (true, "MiniMax API Key 已填写。连通性将在生成或刷新音色库时验证，测试按钮不会发起语音合成以避免消耗额度。"));
     }
 
-    public async Task<TtsResult> GenerateAsync(TtsRequest request, string apiKey)
+    public async Task<TtsResult> GenerateAsync(
+        TtsRequest request,
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, T2aEndpoint);
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
         httpRequest.Content = new StringContent(BuildT2aRequestJson(request), Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.SendAsync(httpRequest);
-        var json = await response.Content.ReadAsStringAsync();
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
             return new TtsResult { Success = false, ErrorMessage = $"MiniMax API 错误 ({response.StatusCode}): {json}" };
@@ -46,7 +55,7 @@ public sealed class MiniMaxTtsProvider
             return new TtsResult { Success = false, ErrorMessage = "MiniMax 返回结果无法解析音频数据: " + json };
 
         var filePath = GetOutputFilePath(request.OutputFormat);
-        await File.WriteAllBytesAsync(filePath, audioBytes);
+        await File.WriteAllBytesAsync(filePath, audioBytes, cancellationToken);
 
         var vendor = VendorRegistry.GetById("minimax");
         return new TtsResult
@@ -60,17 +69,19 @@ public sealed class MiniMaxTtsProvider
         };
     }
 
-    public async Task<List<VoiceOption>> FetchVoicesAsync(string apiKey)
+    public async Task<List<VoiceOption>> FetchVoicesAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, VoiceEndpoint);
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
         httpRequest.Content = new StringContent("""{"voice_type":"all"}""", Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.SendAsync(httpRequest);
-        if (!response.IsSuccessStatusCode)
-            return new List<VoiceOption>();
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        response.EnsureSuccessStatusCode();
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
         return ParseVoicesJson(json);
     }
 

@@ -12,41 +12,37 @@ public class TtsService
 {
     private readonly HttpClient _httpClient = new();
     private readonly SettingsService _settingsService;
-    private readonly AliyunTtsProvider _aliyunProvider;
-    private readonly HuoshanTtsProvider _huoshanProvider;
-    private readonly TencentTtsProvider _tencentProvider;
-    private readonly GoogleTtsProvider _googleProvider;
-    private readonly OpenAiTtsProvider _openAiProvider;
-    private readonly AzureTtsProvider _azureProvider;
-    private readonly BaiduTtsProvider _baiduProvider;
-    private readonly XiaomiMimoTtsProvider _xiaomiMimoProvider;
-    private readonly MiniMaxTtsProvider _miniMaxProvider;
-    private readonly ElevenLabsTtsProvider _elevenLabsProvider;
-    private readonly FishAudioTtsProvider _fishAudioProvider;
-    private readonly DeepgramTtsProvider _deepgramProvider;
+    private readonly TtsProviderRegistry _providers;
 
     public TtsService(SettingsService settingsService)
     {
         _settingsService = settingsService;
         _httpClient.Timeout = TimeSpan.FromSeconds(60);
-        _aliyunProvider = new AliyunTtsProvider(_httpClient, _settingsService);
-        _huoshanProvider = new HuoshanTtsProvider(_httpClient, _settingsService);
-        _tencentProvider = new TencentTtsProvider(_httpClient, _settingsService);
-        _googleProvider = new GoogleTtsProvider(_httpClient, _settingsService);
-        _openAiProvider = new OpenAiTtsProvider(_httpClient, _settingsService);
-        _azureProvider = new AzureTtsProvider(_httpClient, _settingsService);
-        _baiduProvider = new BaiduTtsProvider(_httpClient, _settingsService);
-        _xiaomiMimoProvider = new XiaomiMimoTtsProvider(_httpClient, _settingsService);
-        _miniMaxProvider = new MiniMaxTtsProvider(_httpClient, _settingsService);
-        _elevenLabsProvider = new ElevenLabsTtsProvider(_httpClient, _settingsService);
-        _fishAudioProvider = new FishAudioTtsProvider(_httpClient, _settingsService);
-        _deepgramProvider = new DeepgramTtsProvider(_httpClient, _settingsService);
+        _providers = new TtsProviderRegistry(new ITtsProvider[]
+        {
+            new AliyunTtsProvider(_httpClient, _settingsService),
+            new HuoshanTtsProvider(_httpClient, _settingsService),
+            new TencentTtsProvider(_httpClient, _settingsService),
+            new GoogleTtsProvider(_httpClient, _settingsService),
+            new OpenAiTtsProvider(_httpClient, _settingsService),
+            new AzureTtsProvider(_httpClient, _settingsService),
+            new BaiduTtsProvider(_httpClient, _settingsService),
+            new XiaomiMimoTtsProvider(_httpClient, _settingsService),
+            new MiniMaxTtsProvider(_httpClient, _settingsService),
+            new ElevenLabsTtsProvider(_httpClient, _settingsService),
+            new FishAudioTtsProvider(_httpClient, _settingsService),
+            new DeepgramTtsProvider(_httpClient, _settingsService)
+        });
     }
+
+    public IReadOnlyCollection<string> RegisteredProviderIds => _providers.AllIds;
 
     /// <summary>
     /// 测试 API Key 连通性（仅验证鉴权，不消耗 Token）
     /// </summary>
-    public async Task<(bool Success, string Message)> TestConnectivityAsync(string vendorId)
+    public async Task<(bool Success, string Message)> TestConnectivityAsync(
+        string vendorId,
+        CancellationToken cancellationToken = default)
     {
         var apiKey = _settingsService.GetApiKey(vendorId);
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -54,22 +50,14 @@ public class TtsService
 
         try
         {
-            return vendorId switch
-            {
-                "openai" => await _openAiProvider.TestConnectivityAsync(apiKey),
-                "aliyun" => await _aliyunProvider.TestConnectivityAsync(apiKey),
-                "huoshan" => await _huoshanProvider.TestConnectivityAsync(apiKey),
-                "tencent" => await _tencentProvider.TestConnectivityAsync(apiKey),
-                "baidu" => await _baiduProvider.TestConnectivityAsync(apiKey),
-                "azure" => await _azureProvider.TestConnectivityAsync(apiKey),
-                "google" => await _googleProvider.TestConnectivityAsync(apiKey),
-                "xiaomi_mimo" => await _xiaomiMimoProvider.TestConnectivityAsync(apiKey),
-                "minimax" => await _miniMaxProvider.TestConnectivityAsync(apiKey),
-                "elevenlabs" => await _elevenLabsProvider.TestConnectivityAsync(apiKey),
-                "fish_audio" => await _fishAudioProvider.TestConnectivityAsync(apiKey),
-                "deepgram" => await _deepgramProvider.TestConnectivityAsync(apiKey),
-                _ => (false, "该厂商暂不支持连通性测试。")
-            };
+            if (!_providers.TryGet(vendorId, out var provider))
+                return (false, "找不到该厂商的 TTS Provider。");
+
+            return await provider.TestConnectivityAsync(apiKey, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -77,34 +65,46 @@ public class TtsService
         }
     }
 
-    public async Task<List<VoiceOption>> FetchVoicesAsync(string vendorId)
+    public async Task<VoiceCatalogResult> FetchVoiceCatalogAsync(
+        string vendorId,
+        CancellationToken cancellationToken = default)
     {
+        if (!_providers.TryGet(vendorId, out var provider))
+            return new VoiceCatalogResult(false, false, new(), "vendor_not_found", $"找不到厂商: {vendorId}");
+
+        if (provider is not IVoiceCatalogProvider catalogProvider)
+            return new VoiceCatalogResult(false, false, new(), "voice_fetch_not_supported", "该厂商不支持在线音色刷新。");
+
         var apiKey = _settingsService.GetApiKey(vendorId);
-        if (vendorId != "aliyun" && string.IsNullOrWhiteSpace(apiKey)) return new List<VoiceOption>();
+        if (vendorId != "aliyun" && string.IsNullOrWhiteSpace(apiKey))
+            return new VoiceCatalogResult(false, true, new(), "credential_not_configured", "请先配置该厂商的 API Key。");
 
         try
         {
-            if (vendorId == "aliyun") return await _aliyunProvider.FetchVoicesAsync();
-            if (vendorId == "huoshan") return await _huoshanProvider.FetchVoicesAsync(apiKey);
-            if (vendorId == "tencent") return await _tencentProvider.FetchVoicesAsync(apiKey);
-            if (vendorId == "google") return await _googleProvider.FetchVoicesAsync(apiKey);
-            if (vendorId == "azure") return await _azureProvider.FetchVoicesAsync(apiKey);
-            if (vendorId == "minimax") return await _miniMaxProvider.FetchVoicesAsync(apiKey);
-            if (vendorId == "elevenlabs") return await _elevenLabsProvider.FetchVoicesAsync(apiKey);
-            if (vendorId == "fish_audio") return await _fishAudioProvider.FetchVoicesAsync(apiKey);
-            if (vendorId == "deepgram") return await _deepgramProvider.FetchVoicesAsync(apiKey);
-            return new List<VoiceOption>();
+            var voices = await catalogProvider.FetchVoicesAsync(apiKey, cancellationToken);
+            return new VoiceCatalogResult(true, true, voices);
         }
-        catch
+        catch (OperationCanceledException)
         {
-            return new List<VoiceOption>();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return new VoiceCatalogResult(false, true, new(), "voice_fetch_failed", ex.Message);
         }
     }
+
+    public async Task<List<VoiceOption>> FetchVoicesAsync(
+        string vendorId,
+        CancellationToken cancellationToken = default) =>
+        (await FetchVoiceCatalogAsync(vendorId, cancellationToken)).Voices;
 
     /// <summary>
     /// 通用语音合成入口
     /// </summary>
-    public async Task<TtsResult> GenerateAsync(TtsRequest request)
+    public async Task<TtsResult> GenerateAsync(
+        TtsRequest request,
+        CancellationToken cancellationToken = default)
     {
         var vendor = VendorRegistry.GetById(request.VendorId);
         if (vendor == null)
@@ -116,22 +116,14 @@ public class TtsService
 
         try
         {
-            return request.VendorId switch
-            {
-                "openai" => await _openAiProvider.GenerateAsync(request, apiKey),
-                "aliyun" => await _aliyunProvider.GenerateAsync(request, apiKey),
-                "huoshan" => await _huoshanProvider.GenerateAsync(request, apiKey),
-                "tencent" => await _tencentProvider.GenerateAsync(request, apiKey),
-                "baidu" => await _baiduProvider.GenerateAsync(request, apiKey),
-                "azure" => await _azureProvider.GenerateAsync(request, apiKey),
-                "google" => await _googleProvider.GenerateAsync(request, apiKey),
-                "xiaomi_mimo" => await _xiaomiMimoProvider.GenerateAsync(request, apiKey),
-                "minimax" => await _miniMaxProvider.GenerateAsync(request, apiKey),
-                "elevenlabs" => await _elevenLabsProvider.GenerateAsync(request, apiKey),
-                "fish_audio" => await _fishAudioProvider.GenerateAsync(request, apiKey),
-                "deepgram" => await _deepgramProvider.GenerateAsync(request, apiKey),
-                _ => new TtsResult { Success = false, ErrorMessage = $"该厂商 ({vendor.Name}) 暂未实现联调接口。" }
-            };
+            if (!_providers.TryGet(request.VendorId, out var provider))
+                return new TtsResult { Success = false, ErrorMessage = $"该厂商 ({vendor.Name}) 暂未实现联调接口。" };
+
+            return await provider.GenerateAsync(request, apiKey, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

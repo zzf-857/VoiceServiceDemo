@@ -7,7 +7,7 @@ using VoiceServiceDemo.Models;
 
 namespace VoiceServiceDemo.Services.Providers;
 
-public sealed class OpenAiTtsProvider
+public sealed class OpenAiTtsProvider : ITtsProvider
 {
     private readonly HttpClient _httpClient;
     private readonly SettingsService _settingsService;
@@ -18,32 +18,41 @@ public sealed class OpenAiTtsProvider
         _settingsService = settingsService;
     }
 
-    public async Task<(bool Success, string Message)> TestConnectivityAsync(string apiKey)
+    public string VendorId => "openai";
+
+    public async Task<(bool Success, string Message)> TestConnectivityAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var req = new HttpRequestMessage(HttpMethod.Get, "https://api.openai.com/v1/models");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        var resp = await _httpClient.SendAsync(req);
+        var resp = await _httpClient.SendAsync(req, cancellationToken);
         return resp.IsSuccessStatusCode
             ? (true, "OpenAI 连接成功 ✓")
             : (false, $"鉴权失败 ({resp.StatusCode})");
     }
 
-    public async Task<TtsResult> GenerateAsync(TtsRequest request, string apiKey)
+    public async Task<TtsResult> GenerateAsync(
+        TtsRequest request,
+        string apiKey,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var httpRequest = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/audio/speech");
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         httpRequest.Content = new StringContent(BuildSpeechRequestJson(request), Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.SendAsync(httpRequest);
+        var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            var err = await response.Content.ReadAsStringAsync();
+            var err = await response.Content.ReadAsStringAsync(cancellationToken);
             return new TtsResult { Success = false, ErrorMessage = $"OpenAI API 错误 ({response.StatusCode}): {err}" };
         }
 
-        var audioBytes = await response.Content.ReadAsByteArrayAsync();
+        var audioBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
         var filePath = GetOutputFilePath(request.OutputFormat);
-        await File.WriteAllBytesAsync(filePath, audioBytes);
+        await File.WriteAllBytesAsync(filePath, audioBytes, cancellationToken);
 
         var vendor = VendorRegistry.GetById("openai");
         return new TtsResult

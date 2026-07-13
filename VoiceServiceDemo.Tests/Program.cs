@@ -22,6 +22,36 @@ static void AssertFalse(bool condition, string message)
         throw new Exception(message);
 }
 
+static void AssertThrows<TException>(Action action, string message)
+    where TException : Exception
+{
+    try
+    {
+        action();
+    }
+    catch (TException)
+    {
+        return;
+    }
+
+    throw new Exception(message);
+}
+
+static async Task AssertThrowsAsync<TException>(Func<Task> action, string message)
+    where TException : Exception
+{
+    try
+    {
+        await action();
+    }
+    catch (TException)
+    {
+        return;
+    }
+
+    throw new Exception(message);
+}
+
 var audioOutputTempDirectory = Path.Combine(Path.GetTempPath(), $"voice-service-audio-output-{Guid.NewGuid():N}");
 try
 {
@@ -42,6 +72,41 @@ finally
 }
 
 Console.WriteLine("Audio output path reservation tests passed.");
+
+var providerRegistrySettings = new SettingsService();
+var providerRegistryService = new TtsService(providerRegistrySettings);
+AssertEqual(VendorRegistry.All.Count, providerRegistryService.RegisteredProviderIds.Count, "every desktop vendor has one provider registration");
+AssertTrue(VendorRegistry.All.All(vendor => providerRegistryService.RegisteredProviderIds.Contains(vendor.Id)), "provider registry covers all vendor IDs");
+
+var unknownVoiceCatalog = await providerRegistryService.FetchVoiceCatalogAsync("missing-vendor");
+AssertFalse(unknownVoiceCatalog.Success, "unknown vendor catalog lookup fails explicitly");
+AssertEqual("vendor_not_found", unknownVoiceCatalog.ErrorCode, "unknown vendor has stable error code");
+
+var duplicateProvider = new FakeTtsProvider("duplicate");
+AssertThrows<ArgumentException>(
+    () => new TtsProviderRegistry(new ITtsProvider[] { duplicateProvider, duplicateProvider }),
+    "provider registry rejects duplicate IDs");
+
+var cancellationHandler = new CancellationProbeHandler();
+var cancellationProvider = new OpenAiTtsProvider(new HttpClient(cancellationHandler), providerRegistrySettings);
+using (var cancellationSource = new CancellationTokenSource())
+{
+    var connectivityTask = cancellationProvider.TestConnectivityAsync("test-key", cancellationSource.Token);
+    cancellationSource.Cancel();
+    await AssertThrowsAsync<OperationCanceledException>(
+        async () => await connectivityTask,
+        "provider cancellation reaches HttpClient");
+}
+AssertTrue(cancellationHandler.CancellationObserved, "provider forwards cancellation token to HttpClient");
+
+var failingCatalogProvider = new DeepgramTtsProvider(
+    new HttpClient(new StaticResponseHandler(System.Net.HttpStatusCode.Unauthorized, "unauthorized")),
+    providerRegistrySettings);
+await AssertThrowsAsync<HttpRequestException>(
+    async () => await failingCatalogProvider.FetchVoicesAsync("invalid-key"),
+    "voice catalog HTTP failures remain distinguishable from an empty catalog");
+
+Console.WriteLine("Provider registry and cancellation tests passed.");
 
 static bool TryGetNested(JsonElement root, out JsonElement value, params string[] names)
 {
@@ -1721,5 +1786,47 @@ internal sealed class RecordingQueueHandler : HttpMessageHandler
             throw new InvalidOperationException("No fake HTTP response queued.");
 
         return _responses.Dequeue();
+    }
+}
+
+internal sealed class FakeTtsProvider : ITtsProvider
+{
+    public FakeTtsProvider(string vendorId)
+    {
+        VendorId = vendorId;
+    }
+
+    public string VendorId { get; }
+
+    public Task<(bool Success, string Message)> TestConnectivityAsync(
+        string apiKey,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult((true, "ok"));
+
+    public Task<TtsResult> GenerateAsync(
+        TtsRequest request,
+        string apiKey,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(new TtsResult { Success = true });
+}
+
+internal sealed class CancellationProbeHandler : HttpMessageHandler
+{
+    public bool CancellationObserved { get; private set; }
+
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("The cancellation probe must not complete normally.");
+        }
+        catch (OperationCanceledException)
+        {
+            CancellationObserved = cancellationToken.IsCancellationRequested;
+            throw;
+        }
     }
 }
