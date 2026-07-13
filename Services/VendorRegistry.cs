@@ -570,6 +570,56 @@ public static class VendorRegistry
                 }
             }
         },
+        new VendorConfig
+        {
+            Id = "playht",
+            Name = "PlayHT",
+            Description = "低延迟多模型语音生成与丰富预置/克隆音色平台。",
+            IconName = "radio-tower",
+            ApiBaseUrl = "https://api.play.ht/api/v2",
+            DocumentationUrl = "https://docs.play.ht/reference/api-generate-tts-audio-stream",
+            ImportantLinks = new()
+            {
+                new VendorLink
+                {
+                    Label = "预置音色 API",
+                    Url = "https://docs.play.ht/reference/api-list-ultra-realistic-voices",
+                    Description = "查看 PlayHT 预置音色列表契约"
+                },
+                new VendorLink
+                {
+                    Label = "API Access",
+                    Url = "https://play.ht/app/api-access",
+                    Description = "获取 PlayHT User ID 和 API Key"
+                }
+            },
+            Capabilities = new VendorCapabilities
+            {
+                SupportedOutputFormats = new() { "mp3", "wav", "ogg", "flac", "mulaw" }
+            },
+            SpeedDef = new TtsParameterDef { Min = 0.1, Max = 5.0, Default = 1.0, Step = 0.1 },
+            VolumeDef = new TtsParameterDef { IsSupported = false },
+            SupportsModelFetch = false,
+            SupportsVoiceFetch = true,
+            DefaultModels = new()
+            {
+                new VoiceModel { Id = "Play3.0-mini", Name = "Play 3.0 Mini" },
+                new VoiceModel { Id = "PlayDialog", Name = "PlayDialog" },
+                new VoiceModel { Id = "PlayDialog-turbo", Name = "PlayDialog Turbo" },
+                new VoiceModel { Id = "PlayHT2.0", Name = "PlayHT 2.0" }
+            },
+            DefaultVoices = new()
+            {
+                new VoiceOption
+                {
+                    Id = "larry",
+                    Name = "Larry",
+                    Gender = "男",
+                    Language = "英文",
+                    Categories = new() { "官方示例", "预置音色" }
+                }
+            }
+        },
     };
 
     public static VendorConfig? GetById(string id) => All.FirstOrDefault(v => v.Id == id);

@@ -10,6 +10,13 @@
 
 ## 2026-07-14 迭代记录
 
+- [x] **接入 PlayHT HTTP stream TTS 与预置音色库**
+  - 已完成：新增 `PlayHtTtsProvider` 与不回显 API Key 的双凭证解析，按官方 `POST https://api.play.ht/api/v2/tts/stream` 生成音频，使用 `Authorization: Bearer <api-key>` 和 `X-USER-ID`；支持 `Play3.0-mini`、`PlayDialog`、`PlayDialog-turbo`、`PlayHT2.0`。
+  - 已完成：映射 `mp3`、`wav`、`ogg`、`flac`、`mulaw` 五种输出和 `0.1..5.0` 语速；响应必须成功且非空才保留文件，写入失败会清理原子预留文件。
+  - 已完成：接入 `GET https://api.play.ht/api/v2/voices`，音色 ID 优先读取 `voiceId` 并兼容旧 `value`，同时解析名称、试听、性别、年龄、语言和风格；设置页增加 `PLAYHT_USER_ID|PLAYHT_API_KEY` 帮助，首页增加本地 PlayHT SVG。
+  - 已验证：按 TDD 先因缺少 `PlayHtCredentials`/`PlayHtTtsProvider` 得到 `CS0103/CS0246`；实现后 fake HTTP 覆盖 stream URI、双鉴权头、engine/voice/format/speed 请求、Ogg 精确落盘、格式回落、音色 schema 兼容与在线刷新，桌面全部自检通过，Local API 35/35，解决方案构建 0 警告、0 错误。未提供真实 PlayHT 凭证，因此未执行计费生成。
+  - 关联缺口：继续推进“接入更多厂商 API TTS 生成能力”、P0-01、P1-07、P2-10 和 P2-11；多角色对话、克隆管理、sample rate、seed、temperature、时间戳和异步批量任务暂未接入。
+
 - [x] **接入 Cartesia Sonic TTS bytes 生成与在线音色库**
   - 已完成：新增 `CartesiaTtsProvider`，按官方 `POST https://api.cartesia.ai/tts/bytes` 生成音频，使用 Bearer 鉴权并固定 `Cartesia-Version: 2026-03-01`；支持 `sonic-3.5`、`sonic-3`、`sonic-latest`。
   - 已完成：映射 MP3（44.1 kHz / 128 kbps）与 WAV（PCM S16LE / 44.1 kHz），支持速度 `0.6..1.5`、音量 `0.5..2.0`、SSML transcript 和 `generation_config.emotion`；输出继续使用原子唯一文件预留，失败写入会清理空文件。

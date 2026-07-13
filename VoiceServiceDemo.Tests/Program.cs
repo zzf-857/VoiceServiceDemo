@@ -1727,6 +1727,113 @@ AssertEqual("2026-03-01", cartesiaVoiceHandler.RequestHeaderValues.Single()["Car
 
 Console.WriteLine("Cartesia provider request body and voice parser tests passed.");
 
+var playHtCredentials = PlayHtCredentials.Parse("user-123|key-456");
+AssertEqual("user-123", playHtCredentials.UserId, "PlayHT credential parser reads user id");
+AssertEqual("key-456", playHtCredentials.ApiKey, "PlayHT credential parser reads API key");
+AssertThrows<ArgumentException>(() => PlayHtCredentials.Parse("only-one-part"), "PlayHT credential parser rejects incomplete credentials");
+AssertThrows<ArgumentException>(() => PlayHtCredentials.Parse("user|key|extra"), "PlayHT credential parser rejects extra credential parts");
+
+var playHtAudioBytes = new byte[] { 0x4F, 0x67, 0x67, 0x53, 0x00, 0x02 };
+var playHtSettings = new SettingsService();
+playHtSettings.Settings.OutputDirectory = Path.Combine(Path.GetTempPath(), "VoiceServiceDemoTests", Guid.NewGuid().ToString("N"));
+var playHtHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new ByteArrayContent(playHtAudioBytes)
+    });
+var playHtResult = await new PlayHtTtsProvider(new HttpClient(playHtHandler), playHtSettings)
+    .GenerateAsync(new TtsRequest
+    {
+        VendorId = "playht",
+        ModelId = "Play3.0-mini",
+        VoiceId = "larry",
+        Text = "Hello from PlayHT.",
+        Speed = 1.1,
+        OutputFormat = "ogg"
+    }, "user-123|key-456");
+AssertTrue(playHtResult.Success, "PlayHT fake generation succeeds");
+AssertTrue(playHtResult.FilePath?.EndsWith(".ogg", StringComparison.OrdinalIgnoreCase) == true, "PlayHT Ogg generation saves ogg file");
+AssertTrue((await File.ReadAllBytesAsync(playHtResult.FilePath!)).SequenceEqual(playHtAudioBytes), "PlayHT writes exact returned audio bytes");
+AssertEqual("https://api.play.ht/api/v2/tts/stream", playHtHandler.RequestUris.Single()?.AbsoluteUri, "PlayHT generation uses official stream endpoint");
+AssertEqual("Bearer key-456", playHtHandler.RequestAuthorizationHeaders.Single(), "PlayHT generation sends Bearer API key");
+AssertEqual("user-123", playHtHandler.RequestHeaderValues.Single()["X-USER-ID"], "PlayHT generation sends user id header");
+using (var playHtRequest = JsonDocument.Parse(playHtHandler.RequestBodies.Single()))
+{
+    AssertEqual("Hello from PlayHT.", playHtRequest.RootElement.GetProperty("text").GetString(), "PlayHT request sends text");
+    AssertEqual("larry", playHtRequest.RootElement.GetProperty("voice").GetString(), "PlayHT request sends voice id");
+    AssertEqual("Play3.0-mini", playHtRequest.RootElement.GetProperty("voice_engine").GetString(), "PlayHT request sends voice engine");
+    AssertEqual("ogg", playHtRequest.RootElement.GetProperty("output_format").GetString(), "PlayHT request sends output format");
+    AssertEqual(1.1, playHtRequest.RootElement.GetProperty("speed").GetDouble(), "PlayHT request sends speed");
+}
+
+var playHtFallbackJson = PlayHtTtsProvider.BuildRequestJson(new TtsRequest
+{
+    VendorId = "playht",
+    VoiceId = "",
+    Text = "Fallback PlayHT request.",
+    Speed = 9,
+    OutputFormat = "unknown"
+});
+using (var playHtFallback = JsonDocument.Parse(playHtFallbackJson))
+{
+    AssertEqual("Play3.0-mini", playHtFallback.RootElement.GetProperty("voice_engine").GetString(), "PlayHT request falls back to default engine");
+    AssertEqual("larry", playHtFallback.RootElement.GetProperty("voice").GetString(), "PlayHT request falls back to default voice");
+    AssertEqual("mp3", playHtFallback.RootElement.GetProperty("output_format").GetString(), "PlayHT request falls back to MP3");
+    AssertEqual(5.0, playHtFallback.RootElement.GetProperty("speed").GetDouble(), "PlayHT request clamps high speed");
+}
+
+AssertEqual(".mp3", PlayHtTtsProvider.GetOutputExtension("mp3"), "PlayHT MP3 extension is correct");
+AssertEqual(".wav", PlayHtTtsProvider.GetOutputExtension("wav"), "PlayHT WAV extension is correct");
+AssertEqual(".ogg", PlayHtTtsProvider.GetOutputExtension("ogg"), "PlayHT Ogg extension is correct");
+AssertEqual(".flac", PlayHtTtsProvider.GetOutputExtension("flac"), "PlayHT FLAC extension is correct");
+AssertEqual(".ulaw", PlayHtTtsProvider.GetOutputExtension("mulaw"), "PlayHT mu-law extension maps to audio/basic");
+
+var playHtVoicesJson = """
+[
+  {
+    "voiceId": "larry",
+    "value": "legacy-larry",
+    "name": "Larry",
+    "sample": "https://example.com/larry.wav",
+    "gender": "male",
+    "age": "adult",
+    "language": "English (US)",
+    "languageCode": "en-US"
+  },
+  {
+    "value": "legacy-jane",
+    "name": "Jane",
+    "sample": "https://example.com/jane.wav",
+    "gender": "female",
+    "language": "English (GB)",
+    "language_code": "en-GB"
+  }
+]
+""";
+var playHtVoices = PlayHtTtsProvider.ParseVoicesJson(playHtVoicesJson);
+AssertEqual(2, playHtVoices.Count, "PlayHT voice parser returns all voices");
+AssertEqual("larry", playHtVoices[0].Id, "PlayHT voice parser prefers voiceId");
+AssertEqual("legacy-jane", playHtVoices[1].Id, "PlayHT voice parser falls back to value");
+AssertEqual("男", playHtVoices[0].Gender, "PlayHT voice parser localizes male gender");
+AssertEqual("女", playHtVoices[1].Gender, "PlayHT voice parser localizes female gender");
+AssertEqual("en-US", playHtVoices[0].Language, "PlayHT voice parser maps languageCode");
+AssertEqual("https://example.com/larry.wav", playHtVoices[0].SampleUrl, "PlayHT voice parser maps sample URL");
+AssertTrue(playHtVoices[0].Categories.Contains("adult"), "PlayHT voice parser keeps age category");
+
+var playHtVoiceHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new StringContent(playHtVoicesJson, System.Text.Encoding.UTF8, "application/json")
+    });
+var playHtFetchedVoices = await new PlayHtTtsProvider(new HttpClient(playHtVoiceHandler), playHtSettings)
+    .FetchVoicesAsync("user-123|key-456");
+AssertEqual(2, playHtFetchedVoices.Count, "PlayHT fake voice fetch returns parsed voices");
+AssertEqual("https://api.play.ht/api/v2/voices", playHtVoiceHandler.RequestUris.Single()?.AbsoluteUri, "PlayHT voice fetch uses official voices endpoint");
+AssertEqual("Bearer key-456", playHtVoiceHandler.RequestAuthorizationHeaders.Single(), "PlayHT voice fetch sends Bearer API key");
+AssertEqual("user-123", playHtVoiceHandler.RequestHeaderValues.Single()["X-USER-ID"], "PlayHT voice fetch sends user id");
+
+Console.WriteLine("PlayHT provider request body and voice parser tests passed.");
+
 var googlePlainJson = GoogleTtsProvider.BuildSynthesizeRequestJson(new TtsRequest
 {
     VendorId = "google",
@@ -1932,6 +2039,13 @@ AssertTrue(cartesiaVendor.Capabilities.SupportedOutputFormats.SequenceEqual(new[
 AssertTrue(cartesiaVendor.DefaultModels.Any(model => model.Id == "sonic-3.5"), "Cartesia vendor exposes Sonic 3.5");
 AssertTrue(cartesiaVendor.DefaultVoices.Any(voice => voice.Id == "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"), "Cartesia vendor exposes official Skylar example voice");
 
+var playHtVendor = VendorRegistry.GetById("playht") ?? throw new Exception("PlayHT vendor config is missing");
+AssertTrue(playHtVendor.SupportsVoiceFetch, "PlayHT vendor enables online voice refresh");
+AssertFalse(playHtVendor.VolumeDef.IsSupported, "PlayHT vendor does not claim unsupported volume control");
+AssertTrue(playHtVendor.Capabilities.SupportedOutputFormats.SequenceEqual(new[] { "mp3", "wav", "ogg", "flac", "mulaw" }), "PlayHT vendor exposes official output formats");
+AssertTrue(playHtVendor.DefaultModels.Any(model => model.Id == "Play3.0-mini"), "PlayHT vendor exposes Play3.0-mini");
+AssertTrue(playHtVendor.DefaultVoices.Any(voice => voice.Id == "larry"), "PlayHT vendor exposes official Larry example voice");
+
 Console.WriteLine("Vendor capabilities registry tests passed.");
 
 var settingsRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Settings.razor");
@@ -1948,6 +2062,7 @@ AssertTrue(settingsMarkup.Contains("ELEVENLABS_API_KEY"), "Settings explains Ele
 AssertTrue(settingsMarkup.Contains("FISH_AUDIO_API_KEY"), "Settings explains Fish Audio credential naming");
 AssertTrue(settingsMarkup.Contains("DEEPGRAM_API_KEY"), "Settings explains Deepgram credential naming");
 AssertTrue(settingsMarkup.Contains("CARTESIA_API_KEY"), "Settings explains Cartesia credential naming");
+AssertTrue(settingsMarkup.Contains("PLAYHT_USER_ID|PLAYHT_API_KEY"), "Settings explains PlayHT two-part credentials");
 AssertTrue(settingsMarkup.Contains("本地 TTS API"), "Settings exposes local API controls");
 AssertTrue(settingsMarkup.Contains("DesktopLocalApiService"), "Settings reads live API status");
 AssertTrue(settingsMarkup.Contains("host.docker.internal"), "Settings explains local Docker address");
@@ -1991,6 +2106,7 @@ AssertTrue(homeMarkup.Contains("assets/vendor-icons/elevenlabs.svg"), "Home page
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/fish_audio.svg"), "Home page uses local Fish Audio brand icon");
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/deepgram.svg"), "Home page uses local Deepgram brand icon");
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/cartesia.svg"), "Home page uses local Cartesia brand icon");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/playht.svg"), "Home page uses local PlayHT brand icon");
 
 var vendorIconRoot = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "assets", "vendor-icons");
 foreach (var iconFile in new[]
@@ -2007,7 +2123,8 @@ foreach (var iconFile in new[]
     "elevenlabs.svg",
     "fish_audio.svg",
     "deepgram.svg",
-    "cartesia.svg"
+    "cartesia.svg",
+    "playht.svg"
 })
 {
     var iconPath = Path.Combine(vendorIconRoot, iconFile);

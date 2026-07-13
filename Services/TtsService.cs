@@ -32,7 +32,8 @@ public class TtsService
             new ElevenLabsTtsProvider(_httpClient, _settingsService),
             new FishAudioTtsProvider(_httpClient, _settingsService),
             new DeepgramTtsProvider(_httpClient, _settingsService),
-            new CartesiaTtsProvider(_httpClient, _settingsService)
+            new CartesiaTtsProvider(_httpClient, _settingsService),
+            new PlayHtTtsProvider(_httpClient, _settingsService)
         });
     }
 
