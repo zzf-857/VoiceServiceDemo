@@ -10,6 +10,13 @@
 
 ## 2026-07-14 迭代记录
 
+- [x] **接入 Amazon Polly SigV4 TTS 与分页在线音色库**
+  - 已完成：新增 `AwsPollyCredentials`、`AwsSignatureV4` 与 `AmazonPollyTtsProvider`，按区域调用 `POST /v1/speech`；支持长期/临时 AWS 凭证、`standard`、`neural`、`long-form`、`generative` 引擎、普通文本/SSML，以及 `mp3`、`ogg_vorbis`、`pcm` 输出。
+  - 已完成：生成与音色请求均使用 AWS SigV4；凭证区域限制为字母、数字和连字符，所有凭证段拒绝控制字符，错误信息与签名结果字符串不回显密钥或临时令牌；失败、空响应、取消或写入异常会清理原子预留文件。
+  - 已完成：接入 `GET /v1/voices` 的 `NextToken` 分页，逐页重新签名并最多读取 20 页，合并音色 ID、名称、性别、语言和支持引擎；注册表、设置凭证帮助、首页本地 SVG、README 15 家厂商与本地 REST API 自动发布已同步，本轮未修改独立旧版 MCP。
+  - 已验证：按 TDD 先仅加入测试，初次运行因缺少 `AwsPollyCredentials`、`AwsSignatureV4`、`AmazonPollyTtsProvider` 得到 `CS0103/CS0246`；实现后固定 SigV4 向量、fake HTTP 精确音频落盘、安全错误、SSML/格式和两页分页逐页签名均通过。Local API 35/35、桌面自检全部通过，解决方案构建 0 警告、0 错误；未使用真实 AWS 凭证或执行计费生成。
+  - 本轮范围：不包含 lexicon、speech marks、异步长文本任务 API 和区域自动发现，这些能力继续作为后续缺口跟踪。
+
 - [x] **接入 PlayHT HTTP stream TTS 与预置音色库**
   - 已完成：新增 `PlayHtTtsProvider` 与不回显 API Key 的双凭证解析，按官方 `POST https://api.play.ht/api/v2/tts/stream` 生成音频，使用 `Authorization: Bearer <api-key>` 和 `X-USER-ID`；支持 `Play3.0-mini`、`PlayDialog`、`PlayDialog-turbo`、`PlayHT2.0`。
   - 已完成：映射 `mp3`、`wav`、`ogg`、`flac`、`mulaw` 五种输出和 `0.1..5.0` 语速；响应必须成功且非空才保留文件，写入失败会清理原子预留文件。

@@ -1,4 +1,5 @@
 using VoiceService.Shared;
+using VoiceServiceDemo.Helpers;
 using VoiceServiceDemo.Models;
 using VoiceServiceDemo.Services;
 using VoiceServiceDemo.Services.Providers;
@@ -1834,6 +1835,219 @@ AssertEqual("user-123", playHtVoiceHandler.RequestHeaderValues.Single()["X-USER-
 
 Console.WriteLine("PlayHT provider request body and voice parser tests passed.");
 
+var awsCredentials = AwsPollyCredentials.Parse(
+    "AKIDEXAMPLE|wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY|us-east-1|session-token");
+AssertEqual("AKIDEXAMPLE", awsCredentials.AccessKeyId, "Amazon Polly credential parser reads access key id");
+AssertEqual("us-east-1", awsCredentials.Region, "Amazon Polly credential parser reads region");
+AssertTrue(awsCredentials.HasSessionToken, "Amazon Polly credential parser detects a session token");
+AssertFalse(awsCredentials.ToString().Contains(awsCredentials.SecretAccessKey, StringComparison.Ordinal), "Amazon Polly credentials do not stringify the secret access key");
+AssertFalse(awsCredentials.ToString().Contains(awsCredentials.SessionToken!, StringComparison.Ordinal), "Amazon Polly credentials do not stringify the session token");
+
+var awsLongLivedCredentials = AwsPollyCredentials.Parse("access-key|secret-key|eu-west-1");
+AssertFalse(awsLongLivedCredentials.HasSessionToken, "Amazon Polly credential parser accepts long-lived credentials without a session token");
+var awsBlankOptionalToken = AwsPollyCredentials.Parse("access-key|secret-key|ap-southeast-2|");
+AssertFalse(awsBlankOptionalToken.HasSessionToken, "Amazon Polly credential parser treats a blank optional token as absent");
+AssertThrows<ArgumentException>(() => AwsPollyCredentials.Parse("access-key|secret-key"), "Amazon Polly credential parser rejects incomplete credentials");
+AssertThrows<ArgumentException>(() => AwsPollyCredentials.Parse("|secret-key|us-east-1"), "Amazon Polly credential parser rejects blank access key ids");
+AssertThrows<ArgumentException>(() => AwsPollyCredentials.Parse("access-key||us-east-1"), "Amazon Polly credential parser rejects blank secret access keys");
+AssertThrows<ArgumentException>(() => AwsPollyCredentials.Parse("access-key|secret-key|us.east.1"), "Amazon Polly credential parser rejects dots in regions");
+AssertThrows<ArgumentException>(() => AwsPollyCredentials.Parse("access-key|secret-key|us-east-1/voices"), "Amazon Polly credential parser rejects path injection in regions");
+AssertThrows<ArgumentException>(() => AwsPollyCredentials.Parse("access-key|secret-key|https://attacker.invalid"), "Amazon Polly credential parser rejects host injection in regions");
+AssertThrows<ArgumentException>(() => AwsPollyCredentials.Parse("access\r\nkey|secret-key|us-east-1"), "Amazon Polly credential parser rejects control characters in access key ids");
+AssertThrows<ArgumentException>(() => AwsPollyCredentials.Parse("access-key|secret\tkey|us-east-1"), "Amazon Polly credential parser rejects control characters in secret access keys");
+AssertThrows<ArgumentException>(() => AwsPollyCredentials.Parse("access-key|secret-key|us-east-1|token\r\nX-Test: injected"), "Amazon Polly credential parser rejects header injection in session tokens");
+try
+{
+    AwsPollyCredentials.Parse("access-key|secret-must-not-leak|bad.region|session-must-not-leak");
+    throw new Exception("Amazon Polly invalid credential test did not throw");
+}
+catch (ArgumentException ex)
+{
+    AssertFalse(ex.Message.Contains("secret-must-not-leak", StringComparison.Ordinal), "Amazon Polly credential errors do not reveal the secret access key");
+    AssertFalse(ex.Message.Contains("session-must-not-leak", StringComparison.Ordinal), "Amazon Polly credential errors do not reveal the session token");
+}
+
+var awsSignatureTimestamp = new DateTimeOffset(2026, 7, 14, 0, 0, 0, TimeSpan.Zero);
+var awsSignaturePayload = System.Text.Encoding.UTF8.GetBytes("{}");
+var awsSignature = AwsSignatureV4.Sign(
+    HttpMethod.Post,
+    new Uri("https://polly.us-east-1.amazonaws.com/v1/speech"),
+    awsSignaturePayload,
+    awsCredentials,
+    "polly",
+    awsSignatureTimestamp);
+const string expectedAwsCanonicalRequest = "POST\n/v1/speech\n\nhost:polly.us-east-1.amazonaws.com\nx-amz-date:20260714T000000Z\nx-amz-security-token:session-token\n\nhost;x-amz-date;x-amz-security-token\n44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a";
+const string expectedAwsAuthorization = "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20260714/us-east-1/polly/aws4_request, SignedHeaders=host;x-amz-date;x-amz-security-token, Signature=637c347a115ffb0f69b43f31898b42abb47769e885bbedcb6b8939b0cff1d939";
+AssertEqual("20260714T000000Z", awsSignature.AmzDate, "AWS SigV4 emits the expected x-amz-date");
+AssertEqual("44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a", awsSignature.PayloadHash, "AWS SigV4 hashes the payload");
+AssertEqual("host;x-amz-date;x-amz-security-token", awsSignature.SignedHeaders, "AWS SigV4 signs the session token for temporary credentials");
+AssertEqual(expectedAwsCanonicalRequest, awsSignature.CanonicalRequest, "AWS SigV4 creates the expected canonical request");
+AssertEqual(
+    "7ca631f61ab784a0b3443e740166aed89f86e9cbe86bde068719a305b9963fae",
+    Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(awsSignature.CanonicalRequest))).ToLowerInvariant(),
+    "AWS SigV4 canonical request hash matches the fixed vector");
+AssertEqual(expectedAwsAuthorization, awsSignature.Authorization, "AWS SigV4 authorization matches the fixed vector");
+AssertFalse(awsSignature.Authorization.Contains(awsCredentials.SecretAccessKey, StringComparison.Ordinal), "AWS SigV4 result does not reveal the secret access key");
+AssertFalse(awsSignature.ToString().Contains("session-token", StringComparison.Ordinal), "AWS SigV4 result does not stringify the session token");
+
+var awsQuerySignature = AwsSignatureV4.Sign(
+    HttpMethod.Get,
+    new Uri("https://polly.us-east-1.amazonaws.com/v1/voices?NextToken=b%2B2&Engine=neural"),
+    ReadOnlySpan<byte>.Empty,
+    awsCredentials,
+    "polly",
+    awsSignatureTimestamp);
+AssertEqual("Engine=neural&NextToken=b%2B2", awsQuerySignature.CanonicalRequest.Split('\n')[2], "AWS SigV4 canonical query is RFC3986 encoded and sorted");
+
+var awsAudioBytes = new byte[] { 0x49, 0x44, 0x33, 0x04, 0x00, 0x02, 0x41, 0x57, 0x53 };
+var awsSettings = new SettingsService();
+awsSettings.Settings.OutputDirectory = Path.Combine(Path.GetTempPath(), "VoiceServiceDemoTests", Guid.NewGuid().ToString("N"));
+var awsHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new ByteArrayContent(awsAudioBytes)
+    });
+var awsProvider = new AmazonPollyTtsProvider(new HttpClient(awsHandler), awsSettings, () => awsSignatureTimestamp);
+AssertEqual("aws-polly", awsProvider.VendorId, "Amazon Polly provider exposes the registered vendor id");
+var awsResult = await awsProvider.GenerateAsync(new TtsRequest
+{
+    VendorId = "aws-polly",
+    ModelId = "generative",
+    VoiceId = "Ruth",
+    Text = "Hello from Amazon Polly.",
+    InputFormat = TtsInputFormat.PlainText,
+    OutputFormat = "mp3"
+}, "AKIDEXAMPLE|wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY|us-east-1|session-token");
+AssertTrue(awsResult.Success, "Amazon Polly fake generation succeeds");
+AssertTrue(awsResult.FilePath?.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) == true, "Amazon Polly MP3 generation saves an mp3 file");
+AssertTrue(File.Exists(awsResult.FilePath!), "Amazon Polly fake generation writes an output file");
+AssertTrue((await File.ReadAllBytesAsync(awsResult.FilePath!)).SequenceEqual(awsAudioBytes), "Amazon Polly writes exact returned audio bytes");
+AssertEqual("https://polly.us-east-1.amazonaws.com/v1/speech", awsHandler.RequestUris.Single()?.AbsoluteUri, "Amazon Polly generation uses the regional synthesis endpoint");
+AssertTrue(awsHandler.RequestAuthorizationHeaders.Single().StartsWith("AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20260714/us-east-1/polly/aws4_request", StringComparison.Ordinal), "Amazon Polly generation sends SigV4 authorization");
+AssertEqual("20260714T000000Z", awsHandler.RequestHeaderValues.Single()["x-amz-date"], "Amazon Polly generation sends x-amz-date");
+AssertEqual("session-token", awsHandler.RequestHeaderValues.Single()["x-amz-security-token"], "Amazon Polly generation sends the session token header");
+using (var awsRequest = JsonDocument.Parse(awsHandler.RequestBodies.Single()))
+{
+    AssertEqual("Ruth", awsRequest.RootElement.GetProperty("VoiceId").GetString(), "Amazon Polly request sends VoiceId");
+    AssertEqual("generative", awsRequest.RootElement.GetProperty("Engine").GetString(), "Amazon Polly request sends Engine");
+    AssertEqual("mp3", awsRequest.RootElement.GetProperty("OutputFormat").GetString(), "Amazon Polly request sends OutputFormat");
+    AssertEqual("text", awsRequest.RootElement.GetProperty("TextType").GetString(), "Amazon Polly plain request sends text TextType");
+    AssertEqual("Hello from Amazon Polly.", awsRequest.RootElement.GetProperty("Text").GetString(), "Amazon Polly request sends text");
+}
+
+var awsSsmlHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new ByteArrayContent(new byte[] { 0x01, 0x02, 0x03 })
+    });
+var awsSsmlResult = await new AmazonPollyTtsProvider(new HttpClient(awsSsmlHandler), awsSettings, () => awsSignatureTimestamp)
+    .GenerateAsync(new TtsRequest
+    {
+        VendorId = "aws-polly",
+        ModelId = "unsupported-engine",
+        VoiceId = "Joanna",
+        Text = "ignored",
+        InputFormat = TtsInputFormat.Ssml,
+        SsmlText = "<speak>Hello <break time=\"200ms\"/></speak>",
+        OutputFormat = "ogg_vorbis"
+    }, "access-key|secret-key|eu-west-1");
+AssertTrue(awsSsmlResult.Success, "Amazon Polly SSML fake generation succeeds");
+AssertTrue(awsSsmlResult.FilePath?.EndsWith(".ogg", StringComparison.OrdinalIgnoreCase) == true, "Amazon Polly Ogg Vorbis generation saves an ogg file");
+using (var awsSsmlRequest = JsonDocument.Parse(awsSsmlHandler.RequestBodies.Single()))
+{
+    AssertEqual("neural", awsSsmlRequest.RootElement.GetProperty("Engine").GetString(), "Amazon Polly request defaults invalid engines to neural");
+    AssertEqual("ogg_vorbis", awsSsmlRequest.RootElement.GetProperty("OutputFormat").GetString(), "Amazon Polly request sends Ogg Vorbis output format");
+    AssertEqual("ssml", awsSsmlRequest.RootElement.GetProperty("TextType").GetString(), "Amazon Polly SSML request sends ssml TextType");
+    AssertEqual("<speak>Hello <break time=\"200ms\"/></speak>", awsSsmlRequest.RootElement.GetProperty("Text").GetString(), "Amazon Polly SSML request sends SsmlText");
+}
+AssertEqual(".mp3", AmazonPollyTtsProvider.GetOutputExtension("mp3"), "Amazon Polly MP3 extension is correct");
+AssertEqual(".ogg", AmazonPollyTtsProvider.GetOutputExtension("ogg_vorbis"), "Amazon Polly Ogg Vorbis extension is correct");
+AssertEqual(".pcm", AmazonPollyTtsProvider.GetOutputExtension("pcm"), "Amazon Polly PCM extension is correct");
+
+var awsFailureDirectory = Path.Combine(Path.GetTempPath(), "VoiceServiceDemoTests", Guid.NewGuid().ToString("N"));
+var awsFailureSettings = new SettingsService();
+awsFailureSettings.Settings.OutputDirectory = awsFailureDirectory;
+var awsFailureHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.Forbidden)
+    {
+        Content = new StringContent("secret-key session-token must never be returned")
+    },
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new ByteArrayContent(Array.Empty<byte>())
+    });
+var awsFailureProvider = new AmazonPollyTtsProvider(new HttpClient(awsFailureHandler), awsFailureSettings, () => awsSignatureTimestamp);
+var awsDeniedResult = await awsFailureProvider.GenerateAsync(
+    new TtsRequest { VendorId = "aws-polly", VoiceId = "Joanna", Text = "denied", OutputFormat = "pcm" },
+    "access-key|secret-key|us-east-1|session-token");
+AssertFalse(awsDeniedResult.Success, "Amazon Polly HTTP failure returns an unsuccessful result");
+AssertFalse((awsDeniedResult.ErrorMessage ?? "").Contains("secret-key", StringComparison.Ordinal), "Amazon Polly HTTP failure does not reveal the secret access key");
+AssertFalse((awsDeniedResult.ErrorMessage ?? "").Contains("session-token", StringComparison.Ordinal), "Amazon Polly HTTP failure does not reveal the session token");
+var awsEmptyResult = await awsFailureProvider.GenerateAsync(
+    new TtsRequest { VendorId = "aws-polly", VoiceId = "Joanna", Text = "empty", OutputFormat = "pcm" },
+    "access-key|secret-key|us-east-1|session-token");
+AssertFalse(awsEmptyResult.Success, "Amazon Polly empty response returns an unsuccessful result");
+AssertEqual(0, Directory.Exists(awsFailureDirectory) ? Directory.GetFiles(awsFailureDirectory).Length : 0, "Amazon Polly failure and empty response leave no reserved output files");
+
+var awsVoicesPageOne = """
+{
+  "Voices": [
+    {
+      "Id": "Joanna",
+      "Name": "Joanna",
+      "Gender": "Female",
+      "LanguageCode": "en-US",
+      "LanguageName": "US English",
+      "SupportedEngines": ["standard", "neural"],
+      "AdditionalLanguageCodes": ["es-US"]
+    }
+  ],
+  "NextToken": "b+2"
+}
+""";
+var awsVoicesPageTwo = """
+{
+  "Voices": [
+    {
+      "Id": "Matthew",
+      "Name": "Matthew",
+      "Gender": "Male",
+      "LanguageCode": "en-US",
+      "LanguageName": "US English",
+      "SupportedEngines": ["standard", "neural", "long-form"],
+      "AdditionalLanguageCodes": []
+    }
+  ]
+}
+""";
+var awsVoiceHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new StringContent(awsVoicesPageOne, System.Text.Encoding.UTF8, "application/json")
+    },
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new StringContent(awsVoicesPageTwo, System.Text.Encoding.UTF8, "application/json")
+    });
+var awsVoices = await new AmazonPollyTtsProvider(new HttpClient(awsVoiceHandler), awsSettings, () => awsSignatureTimestamp)
+    .FetchVoicesAsync("AKIDEXAMPLE|wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY|us-east-1|session-token");
+AssertEqual(2, awsVoices.Count, "Amazon Polly voice fetch merges DescribeVoices pages");
+AssertEqual("Joanna", awsVoices[0].Id, "Amazon Polly voice parser maps Id");
+AssertEqual("Joanna", awsVoices[0].Name, "Amazon Polly voice parser maps Name");
+AssertEqual("female", awsVoices[0].Gender, "Amazon Polly voice parser lowercases Gender");
+AssertEqual("en-US", awsVoices[0].Language, "Amazon Polly voice parser maps LanguageCode");
+AssertEqual("standard,neural", string.Join(',', awsVoices[0].Categories), "Amazon Polly voice parser stores SupportedEngines in Categories");
+AssertEqual("male", awsVoices[1].Gender, "Amazon Polly second voice lowercases Gender");
+AssertTrue(awsVoices[1].Categories.Contains("long-form"), "Amazon Polly voice parser keeps long-form engine support");
+AssertEqual("https://polly.us-east-1.amazonaws.com/v1/voices", awsVoiceHandler.RequestUris[0]?.AbsoluteUri, "Amazon Polly first DescribeVoices page uses the regional endpoint");
+AssertEqual("https://polly.us-east-1.amazonaws.com/v1/voices?NextToken=b%2B2", awsVoiceHandler.RequestUris[1]?.AbsoluteUri, "Amazon Polly second DescribeVoices page encodes NextToken");
+AssertEqual(2, awsVoiceHandler.RequestAuthorizationHeaders.Count, "Amazon Polly signs every DescribeVoices page");
+AssertTrue(awsVoiceHandler.RequestAuthorizationHeaders.All(value => value.StartsWith("AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20260714/us-east-1/polly/aws4_request", StringComparison.Ordinal)), "Amazon Polly DescribeVoices pages use the expected SigV4 scope");
+AssertFalse(awsVoiceHandler.RequestAuthorizationHeaders[0] == awsVoiceHandler.RequestAuthorizationHeaders[1], "Amazon Polly pagination query changes the page signature");
+AssertTrue(awsVoiceHandler.RequestHeaderValues.All(headers => headers["x-amz-security-token"] == "session-token"), "Amazon Polly DescribeVoices pages send the session token");
+
+Console.WriteLine("Amazon Polly credential, SigV4, generation, and paginated voice tests passed.");
+
 var googlePlainJson = GoogleTtsProvider.BuildSynthesizeRequestJson(new TtsRequest
 {
     VendorId = "google",
@@ -2046,6 +2260,19 @@ AssertTrue(playHtVendor.Capabilities.SupportedOutputFormats.SequenceEqual(new[] 
 AssertTrue(playHtVendor.DefaultModels.Any(model => model.Id == "Play3.0-mini"), "PlayHT vendor exposes Play3.0-mini");
 AssertTrue(playHtVendor.DefaultVoices.Any(voice => voice.Id == "larry"), "PlayHT vendor exposes official Larry example voice");
 
+var awsPollyVendor = VendorRegistry.GetById("aws-polly") ?? throw new Exception("Amazon Polly vendor config is missing");
+AssertEqual(15, VendorRegistry.All.Count, "desktop registry contains 15 TTS vendors after Amazon Polly registration");
+AssertTrue(providerRegistryService.RegisteredProviderIds.Contains("aws-polly"), "TtsService registers the Amazon Polly provider");
+AssertTrue(awsPollyVendor.SupportsVoiceFetch, "Amazon Polly vendor enables DescribeVoices refresh");
+AssertTrue(awsPollyVendor.Capabilities.SupportsSsml, "Amazon Polly vendor exposes SSML support");
+AssertTrue(awsPollyVendor.Capabilities.SupportedInputFormats.SequenceEqual(new[] { TtsInputFormat.PlainText, TtsInputFormat.Ssml }), "Amazon Polly vendor exposes plain text and SSML input");
+AssertTrue(awsPollyVendor.Capabilities.SupportedOutputFormats.SequenceEqual(new[] { "mp3", "ogg_vorbis", "pcm" }), "Amazon Polly vendor exposes official output formats");
+AssertFalse(awsPollyVendor.SpeedDef.IsSupported, "Amazon Polly vendor does not claim unified speed control");
+AssertFalse(awsPollyVendor.VolumeDef.IsSupported, "Amazon Polly vendor does not claim unified volume control");
+AssertTrue(awsPollyVendor.DefaultModels.Select(model => model.Id).SequenceEqual(new[] { "neural", "standard", "long-form", "generative" }), "Amazon Polly vendor exposes all supported engines with neural as default");
+AssertEqual("Joanna", awsPollyVendor.DefaultVoices.First().Id, "Amazon Polly vendor has a stable official default voice");
+AssertTrue(awsPollyVendor.DocumentationUrl.StartsWith("https://docs.aws.amazon.com/", StringComparison.Ordinal), "Amazon Polly vendor links official AWS documentation");
+
 Console.WriteLine("Vendor capabilities registry tests passed.");
 
 var settingsRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Settings.razor");
@@ -2063,6 +2290,7 @@ AssertTrue(settingsMarkup.Contains("FISH_AUDIO_API_KEY"), "Settings explains Fis
 AssertTrue(settingsMarkup.Contains("DEEPGRAM_API_KEY"), "Settings explains Deepgram credential naming");
 AssertTrue(settingsMarkup.Contains("CARTESIA_API_KEY"), "Settings explains Cartesia credential naming");
 AssertTrue(settingsMarkup.Contains("PLAYHT_USER_ID|PLAYHT_API_KEY"), "Settings explains PlayHT two-part credentials");
+AssertTrue(settingsMarkup.Contains("AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_REGION[|AWS_SESSION_TOKEN]"), "Settings explains Amazon Polly three-part credentials and optional session token");
 AssertTrue(settingsMarkup.Contains("本地 TTS API"), "Settings exposes local API controls");
 AssertTrue(settingsMarkup.Contains("DesktopLocalApiService"), "Settings reads live API status");
 AssertTrue(settingsMarkup.Contains("host.docker.internal"), "Settings explains local Docker address");
@@ -2107,6 +2335,7 @@ AssertTrue(homeMarkup.Contains("assets/vendor-icons/fish_audio.svg"), "Home page
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/deepgram.svg"), "Home page uses local Deepgram brand icon");
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/cartesia.svg"), "Home page uses local Cartesia brand icon");
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/playht.svg"), "Home page uses local PlayHT brand icon");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/aws_polly.svg"), "Home page uses local Amazon Polly brand icon");
 
 var vendorIconRoot = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "assets", "vendor-icons");
 foreach (var iconFile in new[]
@@ -2124,7 +2353,8 @@ foreach (var iconFile in new[]
     "fish_audio.svg",
     "deepgram.svg",
     "cartesia.svg",
-    "playht.svg"
+    "playht.svg",
+    "aws_polly.svg"
 })
 {
     var iconPath = Path.Combine(vendorIconRoot, iconFile);
@@ -2173,6 +2403,9 @@ AssertTrue(File.Exists(Path.Combine(repositoryRoot, "scripts", "local_api_smoke.
 var readme = await File.ReadAllTextAsync(Path.Combine(repositoryRoot, "README.md"));
 AssertTrue(readme.Contains("DIFY_LOCAL_TTS_API.md"), "README links the Dify local API guide");
 AssertTrue(readme.Contains($"{VendorRegistry.All.Count} 家"), "README documents the current desktop vendor count");
+AssertTrue(readme.Contains("15 家"), "README explicitly marks 15 supported desktop vendors");
+AssertTrue(readme.Contains("Amazon Polly"), "README includes Amazon Polly in the vendor documentation");
+AssertTrue(readme.Contains("access_key_id|secret_access_key|region[|session_token]"), "README documents Amazon Polly credential format");
 
 var legacyMcpReadme = await File.ReadAllTextAsync(Path.Combine(repositoryRoot, "VoiceServiceMcp", "README.md"));
 AssertTrue(legacyMcpReadme.Contains("独立旧版 MCP"), "Legacy MCP README distinguishes the independent server from the desktop REST API");

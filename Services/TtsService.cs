@@ -33,7 +33,8 @@ public class TtsService
             new FishAudioTtsProvider(_httpClient, _settingsService),
             new DeepgramTtsProvider(_httpClient, _settingsService),
             new CartesiaTtsProvider(_httpClient, _settingsService),
-            new PlayHtTtsProvider(_httpClient, _settingsService)
+            new PlayHtTtsProvider(_httpClient, _settingsService),
+            new AmazonPollyTtsProvider(_httpClient, _settingsService)
         });
     }
 

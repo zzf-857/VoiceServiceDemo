@@ -549,6 +549,7 @@
         "elevenlabs" => "填写 ELEVENLABS_API_KEY",
         "cartesia" => "填写 CARTESIA_API_KEY",
         "playht" => "格式: PLAYHT_USER_ID|PLAYHT_API_KEY",
+        "aws-polly" => "格式: AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_REGION[|AWS_SESSION_TOKEN]",
         _ => "此处输入 API 凭证"
     };
 
@@ -566,6 +567,7 @@
         "elevenlabs" => "生成语音必填。填写 ElevenLabs 的 ELEVENLABS_API_KEY；刷新音色库也使用同一凭证。",
         "cartesia" => "生成语音必填。填写 Cartesia 的 CARTESIA_API_KEY；生成与刷新在线音色库使用同一凭证。",
         "playht" => "生成语音必填。按 PLAYHT_USER_ID|PLAYHT_API_KEY 填写两段凭证；生成与刷新预置音色库都需要。",
+        "aws-polly" => "生成语音必填。按 AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_REGION 填写三段凭证；使用临时凭证时追加可选 AWS_SESSION_TOKEN。生成与刷新在线音色库使用同一凭证。",
         _ => "生成语音必填。请按该厂商要求填写凭证。"
     };
 

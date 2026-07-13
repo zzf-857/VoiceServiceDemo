@@ -620,6 +620,58 @@ public static class VendorRegistry
                 }
             }
         },
+        new VendorConfig
+        {
+            Id = "aws-polly",
+            Name = "Amazon Polly",
+            Description = "AWS 托管的多语言语音合成服务，支持神经、长文本与生成式引擎。",
+            IconName = "cloud",
+            ApiBaseUrl = "https://polly.{region}.amazonaws.com",
+            DocumentationUrl = "https://docs.aws.amazon.com/polly/latest/dg/API_SynthesizeSpeech.html",
+            ImportantLinks = new()
+            {
+                new VendorLink
+                {
+                    Label = "DescribeVoices API",
+                    Url = "https://docs.aws.amazon.com/polly/latest/dg/API_DescribeVoices.html",
+                    Description = "查看 Amazon Polly 在线音色列表与分页参数"
+                },
+                new VendorLink
+                {
+                    Label = "AWS 凭证与区域",
+                    Url = "https://docs.aws.amazon.com/polly/latest/dg/setting-up.html",
+                    Description = "配置 AWS 访问凭证并选择 Amazon Polly 区域"
+                }
+            },
+            Capabilities = new VendorCapabilities
+            {
+                SupportsSsml = true,
+                SupportedInputFormats = new() { TtsInputFormat.PlainText, TtsInputFormat.Ssml },
+                SupportedOutputFormats = new() { "mp3", "ogg_vorbis", "pcm" }
+            },
+            SpeedDef = new TtsParameterDef { IsSupported = false },
+            VolumeDef = new TtsParameterDef { IsSupported = false },
+            SupportsModelFetch = false,
+            SupportsVoiceFetch = true,
+            DefaultModels = new()
+            {
+                new VoiceModel { Id = "neural", Name = "Neural" },
+                new VoiceModel { Id = "standard", Name = "Standard" },
+                new VoiceModel { Id = "long-form", Name = "Long-form" },
+                new VoiceModel { Id = "generative", Name = "Generative" }
+            },
+            DefaultVoices = new()
+            {
+                new VoiceOption
+                {
+                    Id = "Joanna",
+                    Name = "Joanna",
+                    Gender = "female",
+                    Language = "en-US",
+                    Categories = new() { "standard", "neural" }
+                }
+            }
+        },
     };
 
     public static VendorConfig? GetById(string id) => All.FirstOrDefault(v => v.Id == id);

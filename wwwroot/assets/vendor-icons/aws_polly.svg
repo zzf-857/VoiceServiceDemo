@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Amazon Polly</title>
+  <desc id="desc">Cloud speech synthesis icon in AWS orange and violet</desc>
+  <defs>
+    <linearGradient id="cloud" x1="10" y1="10" x2="54" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8c4fff"/>
+      <stop offset="1" stop-color="#5b2aa8"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#cloud)" d="M18.2 47.5a11.7 11.7 0 0 1-1.1-23.3A16.4 16.4 0 0 1 48 26.8a10.4 10.4 0 0 1-1.8 20.7h-28Z"/>
+  <path fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" d="M24 35v4m6-10v16m6-12v8m6-5v2"/>
+  <path fill="none" stroke="#ff9900" stroke-width="3" stroke-linecap="round" d="M14 53c10.6 5.2 25.6 5.2 36.2-.1"/>
+  <path fill="#ff9900" d="m48.4 50.3 5.8 1.1-4.1 4.3-1.7-5.4Z"/>
+</svg>
