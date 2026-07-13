@@ -25,7 +25,7 @@ public partial class App : Application
         e.Handled = true;
     }
 
-    private void LogException(Exception ex)
+    private void LogException(Exception? ex)
     {
         if (ex == null) return;
         try

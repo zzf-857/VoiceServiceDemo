@@ -176,4 +176,15 @@ public class AppSettings
 {
     public Dictionary<string, string> ApiKeys { get; set; } = new();
     public string OutputDirectory { get; set; } = "";
+    public LocalApiSettings LocalApi { get; set; } = new();
+}
+
+public sealed class LocalApiSettings
+{
+    public bool Enabled { get; set; } = true;
+    public int Port { get; set; } = 5055;
+    public bool AllowRemote { get; set; }
+    public string AccessToken { get; set; } = "";
+    public int MaxConcurrentRequests { get; set; } = 2;
+    public int MaxTextLength { get; set; } = 20_000;
 }

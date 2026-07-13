@@ -19,6 +19,7 @@
     <PackageReference Include="NAudio" Version="2.2.*" />
     <PackageReference Include="System.Text.Json" Version="8.0.*" />
     <ProjectReference Include="VoiceServiceShared\VoiceServiceShared.csproj" />
+    <ProjectReference Include="VoiceServiceLocalApi\VoiceServiceLocalApi.csproj" />
   </ItemGroup>
 
   <ItemGroup>

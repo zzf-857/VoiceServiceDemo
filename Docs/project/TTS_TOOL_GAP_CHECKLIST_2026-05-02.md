@@ -10,6 +10,13 @@
 
 ## 2026-07-14 迭代记录
 
+- [x] **本地 API 复用桌面能力并随软件生命周期启停**
+  - 已完成：`AppSettings` 新增默认启用的本地 API 配置，首次启动自动生成并立即持久化 256 位访问 Token；非法端口、并发数和文本上限会恢复安全默认值，测试可使用隔离配置路径。
+  - 已完成：新增 `DesktopTtsGateway`，把桌面 12 家厂商、模型、能力、参数范围和默认音色映射到外部契约，只暴露 `configured` 布尔值；生成请求复用桌面 `TtsService`、现有凭证和输出目录，缺凭证与参数错误使用稳定错误码。
+  - 已完成：新增 `DesktopLocalApiService` 运行状态与重启控制；`MainWindow` 在加载后启动 API，关闭时优雅停止并异步释放服务。端口占用只把 API 标为 Faulted 并保留诊断信息，不阻止桌面界面运行；释放端口后可正常重启。
+  - 已验证：桌面自检新增设置默认值、Token 持久化、12 家映射、默认请求、SSML 拒绝、缺凭证、端口冲突、故障恢复、真实 `/health` 和窗口生命周期标记；Local API 34 项测试全部通过，包含 Kestrel 同一 Host 包装器启停后再次启动。
+  - 关联缺口：显著推进 P0-01、P0-02、P2-10、P2-11 和 P3-06；设置页可视化控制、Dify 文档及旧 MCP 的后续收敛仍按独立步骤跟踪。
+
 - [x] **开放受保护的本地 TTS HTTP 接口与 OpenAPI**
   - 已完成：`VoiceServiceLocalApi` 新增 Kestrel Host、统一 `application/problem+json`、Bearer Token 中间件、1 MiB 请求体限制、snake_case JSON 和 OpenAPI 3 文档；默认 Host URL 固定使用 `127.0.0.1`，避免不受信任 Host 头污染下载地址。
   - 已完成：实现 `GET /health`、厂商列表、音色列表、`POST /api/v1/tts` JSON URL、`POST /api/v1/tts/audio` 二进制、受 Token 保护的音频下载及 `/openapi/v1.json`；生成并发按配置限流，二进制读取完成后才释放槽位。

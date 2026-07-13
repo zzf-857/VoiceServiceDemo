@@ -2,6 +2,7 @@ using VoiceService.Shared;
 using VoiceServiceDemo.Models;
 using VoiceServiceDemo.Services;
 using VoiceServiceDemo.Services.Providers;
+using VoiceServiceLocalApi;
 using System.Text.Json;
 
 static void AssertEqual<T>(T expected, T actual, string message)
@@ -107,6 +108,188 @@ await AssertThrowsAsync<HttpRequestException>(
     "voice catalog HTTP failures remain distinguishable from an empty catalog");
 
 Console.WriteLine("Provider registry and cancellation tests passed.");
+
+var desktopApiSettingsRoot = Path.Combine(Path.GetTempPath(), "VoiceOpsDesktopApiTests", Guid.NewGuid().ToString("N"));
+var desktopApiSettingsPath = Path.Combine(desktopApiSettingsRoot, "config.json");
+try
+{
+    Directory.CreateDirectory(desktopApiSettingsRoot);
+    File.WriteAllText(desktopApiSettingsPath, JsonSerializer.Serialize(new AppSettings
+    {
+        OutputDirectory = Path.Combine(desktopApiSettingsRoot, "output"),
+        LocalApi = new LocalApiSettings
+        {
+            Enabled = true,
+            Port = 80,
+            AllowRemote = false,
+            AccessToken = "   ",
+            MaxConcurrentRequests = 0,
+            MaxTextLength = 20_001
+        }
+    }));
+
+    var desktopApiSettings = new SettingsService(desktopApiSettingsPath);
+    AssertTrue(desktopApiSettings.Settings.LocalApi.Enabled, "local API defaults to enabled");
+    AssertEqual(5055, desktopApiSettings.Settings.LocalApi.Port, "local API defaults to port 5055");
+    AssertFalse(desktopApiSettings.Settings.LocalApi.AllowRemote, "local API defaults to loopback-only access");
+    AssertEqual(2, desktopApiSettings.Settings.LocalApi.MaxConcurrentRequests, "invalid local API concurrency is normalized");
+    AssertEqual(20_000, desktopApiSettings.Settings.LocalApi.MaxTextLength, "invalid local API text length is normalized");
+    AssertFalse(string.IsNullOrWhiteSpace(desktopApiSettings.Settings.LocalApi.AccessToken), "blank local API token is regenerated");
+    AssertEqual(43, desktopApiSettings.Settings.LocalApi.AccessToken.Length, "generated local API token contains 256 Base64URL bits");
+    AssertTrue(LocalApiToken.Matches(
+        desktopApiSettings.Settings.LocalApi.AccessToken,
+        desktopApiSettings.Settings.LocalApi.AccessToken), "settings generate a valid local API token");
+    AssertTrue(File.Exists(desktopApiSettingsPath), "generated local API token is persisted immediately");
+
+    var normalizedToken = desktopApiSettings.Settings.LocalApi.AccessToken;
+    var persistedSettings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(desktopApiSettingsPath))!;
+    AssertEqual(5055, persistedSettings.LocalApi.Port, "normalized local API port is written back");
+    AssertEqual(2, persistedSettings.LocalApi.MaxConcurrentRequests, "normalized local API concurrency is written back");
+    AssertEqual(20_000, persistedSettings.LocalApi.MaxTextLength, "normalized local API text length is written back");
+    AssertEqual(normalizedToken, persistedSettings.LocalApi.AccessToken, "generated local API token is written back");
+
+    var reloadedDesktopApiSettings = new SettingsService(desktopApiSettingsPath);
+    AssertEqual(normalizedToken, reloadedDesktopApiSettings.Settings.LocalApi.AccessToken, "reloading normalized settings preserves the generated token");
+
+    var desktopGateway = new DesktopTtsGateway(new TtsService(desktopApiSettings), desktopApiSettings);
+    var apiVendors = await desktopGateway.GetVendorsAsync(CancellationToken.None);
+    AssertEqual(VendorRegistry.All.Count, apiVendors.Count, "desktop API gateway exposes all registered vendors");
+    AssertTrue(apiVendors.All(vendor => vendor.Configured == !string.IsNullOrWhiteSpace(desktopApiSettings.GetApiKey(vendor.Id))), "desktop API exposes only configured boolean state");
+    AssertFalse(JsonSerializer.Serialize(apiVendors).Contains("ApiKeys", StringComparison.OrdinalIgnoreCase), "desktop API vendor DTO does not expose credential storage");
+
+    var openAiApiVendor = VendorRegistry.GetById("openai")!;
+    var mappedRequest = DesktopTtsGateway.CreateDesktopRequest(
+        new LocalTtsRequest("openai", "hello", "alloy"),
+        openAiApiVendor);
+    AssertEqual("tts-1", mappedRequest.ModelId, "desktop API request uses vendor default model");
+    AssertEqual(1.0, mappedRequest.Speed, "desktop API request uses vendor default speed");
+    AssertEqual(1.0, mappedRequest.Volume, "desktop API request uses vendor default volume");
+    AssertEqual("mp3", mappedRequest.OutputFormat, "desktop API request uses vendor default output format");
+
+    var unsupportedSsml = await desktopGateway.GenerateAsync(
+        new LocalTtsRequest("openai", "<speak>hello</speak>", "alloy", InputFormat: "ssml"),
+        CancellationToken.None);
+    AssertEqual("validation_error", unsupportedSsml.ErrorCode, "desktop API rejects unsupported SSML before provider call");
+
+    var invalidDeepgramRequests = new (string Name, LocalTtsRequest Request)[]
+    {
+        ("output", new LocalTtsRequest("deepgram", "hello", "aura-2-thalia-en", OutputFormat: "pcm")),
+        ("style", new LocalTtsRequest("deepgram", "hello", "aura-2-thalia-en", Style: "cheerful")),
+        ("emotion", new LocalTtsRequest("deepgram", "hello", "aura-2-thalia-en", Emotion: "happy")),
+        ("instructions", new LocalTtsRequest("deepgram", "hello", "aura-2-thalia-en", Instructions: "Speak softly"))
+    };
+    var storedApiKeys = desktopApiSettings.Settings.ApiKeys;
+    desktopApiSettings.Settings.ApiKeys = null!;
+    try
+    {
+        foreach (var invalidRequest in invalidDeepgramRequests)
+        {
+            var beforeCredential = await desktopGateway.GenerateAsync(invalidRequest.Request, CancellationToken.None);
+            AssertEqual("validation_error", beforeCredential.ErrorCode, $"unsupported {invalidRequest.Name} is rejected before credential lookup");
+        }
+    }
+    finally
+    {
+        desktopApiSettings.Settings.ApiKeys = storedApiKeys;
+    }
+
+    desktopApiSettings.SetApiKey("deepgram", "unused-provider-test-key");
+    using (var providerCallSentinel = new CancellationTokenSource())
+    {
+        providerCallSentinel.Cancel();
+        foreach (var invalidRequest in invalidDeepgramRequests)
+        {
+            var beforeProvider = await desktopGateway.GenerateAsync(invalidRequest.Request, providerCallSentinel.Token);
+            AssertEqual("validation_error", beforeProvider.ErrorCode, $"unsupported {invalidRequest.Name} is rejected before provider invocation");
+        }
+    }
+
+    var missingCredential = await desktopGateway.GenerateAsync(
+        new LocalTtsRequest("openai", "hello", "alloy"),
+        CancellationToken.None);
+    AssertEqual("credential_not_configured", missingCredential.ErrorCode, "desktop API reports missing provider credentials explicitly");
+
+    desktopApiSettings.Settings.LocalApi.Enabled = false;
+    desktopApiSettings.Save();
+    await using (var disabledDesktopApiLifecycle = new DesktopLocalApiService(desktopApiSettings, desktopGateway))
+    {
+        var disabledStatuses = new List<LocalApiRuntimeStatus>();
+        disabledDesktopApiLifecycle.StatusChanged += (_, _) => disabledStatuses.Add(disabledDesktopApiLifecycle.Status);
+        var disabledStart = await disabledDesktopApiLifecycle.StartAsync();
+        AssertTrue(disabledStart, "disabled local API treats the stopped desired state as successful");
+        AssertEqual(LocalApiRuntimeStatus.Stopped, disabledDesktopApiLifecycle.Status, "disabled local API remains stopped");
+        AssertEqual(0, disabledStatuses.Count, "disabled local API does not publish a duplicate stopped event");
+        AssertEqual<string?>(null, disabledDesktopApiLifecycle.BaseUrl, "disabled local API does not expose an inactive base URL");
+        AssertEqual<string?>(null, disabledDesktopApiLifecycle.OpenApiUrl, "disabled local API does not expose an inactive OpenAPI URL");
+    }
+
+    desktopApiSettings.Settings.LocalApi.Enabled = true;
+    using var occupiedPort = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+    occupiedPort.Start();
+    var lifecyclePort = ((System.Net.IPEndPoint)occupiedPort.LocalEndpoint).Port;
+    desktopApiSettings.Settings.LocalApi.Port = lifecyclePort;
+    desktopApiSettings.Save();
+    await using var desktopApiLifecycle = new DesktopLocalApiService(desktopApiSettings, desktopGateway);
+    var lifecycleStatuses = new List<LocalApiRuntimeStatus>();
+    desktopApiLifecycle.StatusChanged += (_, _) => lifecycleStatuses.Add(desktopApiLifecycle.Status);
+    var failedStart = await desktopApiLifecycle.StartAsync();
+    AssertFalse(failedStart, "desktop stays alive when the local API port is occupied");
+    AssertEqual(LocalApiRuntimeStatus.Faulted, desktopApiLifecycle.Status, "occupied port is exposed as a faulted API status");
+    AssertTrue(!string.IsNullOrWhiteSpace(desktopApiLifecycle.LastError), "occupied port keeps a diagnostic error");
+    AssertEqual(string.Join(",", new[] { LocalApiRuntimeStatus.Starting, LocalApiRuntimeStatus.Faulted }), string.Join(",", lifecycleStatuses), "failed start publishes starting then faulted");
+    AssertEqual<string?>(null, desktopApiLifecycle.BaseUrl, "failed start does not expose an inactive base URL");
+    AssertEqual<string?>(null, desktopApiLifecycle.OpenApiUrl, "failed start does not expose an inactive OpenAPI URL");
+
+    occupiedPort.Stop();
+    lifecycleStatuses.Clear();
+    var restarted = await desktopApiLifecycle.RestartAsync();
+    AssertTrue(restarted, "desktop local API can restart after the port becomes available");
+    AssertEqual(LocalApiRuntimeStatus.Running, desktopApiLifecycle.Status, "successful restart exposes running status");
+    AssertEqual(
+        string.Join(",", new[] { LocalApiRuntimeStatus.Stopped, LocalApiRuntimeStatus.Starting, LocalApiRuntimeStatus.Running }),
+        string.Join(",", lifecycleStatuses),
+        "restart after a fault publishes stopped, starting, then running");
+    AssertEqual($"http://127.0.0.1:{lifecyclePort}", desktopApiLifecycle.BaseUrl, "running API exposes the actual successful base URL");
+    AssertEqual($"http://127.0.0.1:{lifecyclePort}/openapi/v1.json", desktopApiLifecycle.OpenApiUrl, "running API exposes the actual successful OpenAPI URL");
+    using (var healthClient = new HttpClient())
+    {
+        var health = await healthClient.GetStringAsync($"{desktopApiLifecycle.BaseUrl}/health");
+        AssertTrue(health.Contains("healthy"), "desktop lifecycle host serves health endpoint");
+    }
+
+    var restartedPort = ReserveLoopbackPort();
+    desktopApiSettings.Settings.LocalApi.Port = restartedPort;
+    desktopApiSettings.Save();
+    AssertEqual($"http://127.0.0.1:{lifecyclePort}", desktopApiLifecycle.BaseUrl, "running API URL keeps the successful options snapshot until restart");
+
+    lifecycleStatuses.Clear();
+    var restartedWithNewSettings = await desktopApiLifecycle.RestartAsync();
+    AssertTrue(restartedWithNewSettings, "desktop local API restarts after settings change");
+    AssertEqual(
+        string.Join(",", new[] { LocalApiRuntimeStatus.Stopping, LocalApiRuntimeStatus.Stopped, LocalApiRuntimeStatus.Starting, LocalApiRuntimeStatus.Running }),
+        string.Join(",", lifecycleStatuses),
+        "successful restart publishes the full stop and start sequence");
+    AssertEqual($"http://127.0.0.1:{restartedPort}", desktopApiLifecycle.BaseUrl, "successful restart publishes the new base URL snapshot");
+    using (var healthClient = new HttpClient())
+    {
+        var health = await healthClient.GetStringAsync($"{desktopApiLifecycle.BaseUrl}/health");
+        AssertTrue(health.Contains("healthy"), "restarted desktop lifecycle host serves health at the new URL");
+    }
+
+    lifecycleStatuses.Clear();
+    await desktopApiLifecycle.StopAsync();
+    AssertEqual(LocalApiRuntimeStatus.Stopped, desktopApiLifecycle.Status, "desktop lifecycle host stops cleanly");
+    AssertEqual(string.Join(",", new[] { LocalApiRuntimeStatus.Stopping, LocalApiRuntimeStatus.Stopped }), string.Join(",", lifecycleStatuses), "stop publishes stopping then stopped");
+    AssertEqual<string?>(null, desktopApiLifecycle.BaseUrl, "stopped local API does not expose an inactive base URL");
+    AssertEqual<string?>(null, desktopApiLifecycle.OpenApiUrl, "stopped local API does not expose an inactive OpenAPI URL");
+}
+finally
+{
+    if (Directory.Exists(desktopApiSettingsRoot))
+        Directory.Delete(desktopApiSettingsRoot, recursive: true);
+}
+
+Console.WriteLine("Desktop local API settings and gateway tests passed.");
 
 static bool TryGetNested(JsonElement root, out JsonElement value, params string[] names)
 {
@@ -1652,6 +1835,27 @@ AssertTrue(settingsMarkup.Contains("ELEVENLABS_API_KEY"), "Settings explains Ele
 AssertTrue(settingsMarkup.Contains("FISH_AUDIO_API_KEY"), "Settings explains Fish Audio credential naming");
 AssertTrue(settingsMarkup.Contains("DEEPGRAM_API_KEY"), "Settings explains Deepgram credential naming");
 
+var mainWindowCodePath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "MainWindow.xaml.cs");
+var mainWindowCode = await File.ReadAllTextAsync(mainWindowCodePath);
+AssertTrue(mainWindowCode.Contains("DesktopLocalApiService"), "Main window resolves the desktop local API lifecycle service");
+AssertTrue(mainWindowCode.Contains("Loaded += OnWindowLoaded"), "Main window starts the local API after the window loads");
+AssertTrue(mainWindowCode.Contains("_localApiService.StopAsync"), "Main window stops the local API during shutdown");
+AssertTrue(mainWindowCode.Contains("_serviceProvider.DisposeAsync"), "Main window disposes async local API services during shutdown");
+var loadedHandlerStart = mainWindowCode.IndexOf("private async void OnWindowLoaded", StringComparison.Ordinal);
+var closedHandlerStart = mainWindowCode.IndexOf("protected override void OnClosed", StringComparison.Ordinal);
+AssertTrue(loadedHandlerStart >= 0 && closedHandlerStart > loadedHandlerStart, "Main window lifecycle handlers have stable boundaries");
+var loadedHandlerCode = mainWindowCode[loadedHandlerStart..closedHandlerStart];
+AssertTrue(loadedHandlerCode.Contains("try", StringComparison.Ordinal) && loadedHandlerCode.Contains("catch (Exception ex)", StringComparison.Ordinal), "Main window catches every local API startup boundary exception");
+var closedHandlerCode = mainWindowCode[closedHandlerStart..];
+AssertTrue(closedHandlerCode.Contains("new CancellationTokenSource(TimeSpan.FromSeconds(5))", StringComparison.Ordinal), "Main window shutdown owns a five-second cancellation source");
+AssertTrue(closedHandlerCode.Contains("_localApiService.StopAsync(shutdownTimeout.Token)", StringComparison.Ordinal), "Main window passes the shutdown timeout to local API stop");
+AssertTrue(closedHandlerCode.Contains("WaitAsync(shutdownTimeout.Token)", StringComparison.Ordinal), "Main window bounds service provider disposal with the same shutdown deadline");
+var shutdownFinally = closedHandlerCode.IndexOf("finally", StringComparison.Ordinal);
+var providerDispose = closedHandlerCode.IndexOf("_serviceProvider.DisposeAsync", StringComparison.Ordinal);
+var baseClosed = closedHandlerCode.LastIndexOf("base.OnClosed(e)", StringComparison.Ordinal);
+AssertTrue(shutdownFinally >= 0 && providerDispose > shutdownFinally && baseClosed > providerDispose, "Main window unconditionally disposes async services in finally before base close");
+AssertTrue(typeof(LocalApiSettings).IsSealed, "local API settings are sealed to preserve the persisted configuration shape");
+
 var homeRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Home.razor");
 var homeMarkup = await File.ReadAllTextAsync(homeRazorPath);
 AssertTrue(homeMarkup.Contains("vendor-brand-icon"), "Home page renders real vendor brand icons");
@@ -1734,6 +1938,15 @@ static string FindRepositoryRoot(string startDirectory)
     }
 
     throw new DirectoryNotFoundException("Could not locate VoiceServiceDemo.csproj from " + startDirectory);
+}
+
+static int ReserveLoopbackPort()
+{
+    var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+    listener.Start();
+    var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+    listener.Stop();
+    return port;
 }
 
 internal sealed class StaticResponseHandler : HttpMessageHandler
