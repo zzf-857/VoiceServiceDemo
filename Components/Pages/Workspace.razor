@@ -341,6 +341,20 @@
                         }
                     }
 
+                    @if (SupportsEmotionControls && IsCartesia)
+                    {
+                        <div class="emotion-row">
+                            <span>语气</span>
+                            @foreach (var emotion in CartesiaEmotionOptions)
+                            {
+                                <button class="@($"filter-chip {(_selectedEmotion == emotion.Id ? "active" : "")}")"
+                                        @onclick="@(() => _selectedEmotion = emotion.Id)">
+                                    @emotion.Name
+                                </button>
+                            }
+                        </div>
+                    }
+
                     @if (SupportsInstructionsControls)
                     {
                         <div class="form-group expression-instructions">
@@ -595,6 +609,10 @@
             _selectedEmotion = "";
             _emotionIntensity = TencentEmotionPolicy.DefaultIntensity;
         }
+        else if (IsCartesia)
+        {
+            _selectedEmotion = "neutral";
+        }
         else
         {
             _selectedEmotion = "";
@@ -609,6 +627,7 @@
     private bool IsHuoshan => _vendor?.Id == "huoshan";
     private bool IsTencent => _vendor?.Id == "tencent";
     private bool IsAliyun => _vendor?.Id == "aliyun";
+    private bool IsCartesia => _vendor?.Id == "cartesia";
     private VendorCapabilities VendorCapabilities => _vendor?.Capabilities ?? new();
     private bool SupportsSsmlControls => VendorCapabilities.SupportsSsml;
     private bool SupportsStyleControls => VendorCapabilities.SupportsStyle;
@@ -622,7 +641,7 @@
          _selectedModelId.StartsWith("mimo-v2.5-tts", StringComparison.OrdinalIgnoreCase));
     private bool SupportsExpressionControls =>
         VendorCapabilities.HasExpressionControls &&
-        (SupportsSsmlControls || SupportsStyleControls || HasHuoshanEmotionControls || HasTencentEmotionControls || SupportsInstructionsControls);
+        (SupportsSsmlControls || SupportsStyleControls || HasHuoshanEmotionControls || HasTencentEmotionControls || IsCartesia || SupportsInstructionsControls);
     private string ExpressionHint => _vendor?.Id switch
     {
         "azure" => "Azure 使用 SSML 或 speaking style 控制语气",
@@ -632,6 +651,7 @@
         "openai" => "OpenAI 使用朗读指导控制语气和表达",
         "aliyun" => "阿里云 Instruct 模型使用语气提示控制表达",
         "xiaomi_mimo" => "小米 MiMo 使用朗读指导控制语气、情绪和节奏",
+        "cartesia" => "Cartesia 使用 generation_config.emotion 控制 Sonic 3/3.5 表达",
         _ => "该厂商支持额外表达控制"
     };
     private string InputFieldLabel => SupportsSsmlControls && _inputFormat == TtsInputFormat.Ssml ? "SSML 文本" : "测试文本";
@@ -643,6 +663,17 @@
     private List<TtsExpressionOption> HuoshanEmotionOptions => _selectedVoice == null ? new() : GetHuoshanEmotionOptions(_selectedVoice).ToList();
     private bool HasHuoshanEmotionControls => _selectedVoice != null && HuoshanEmotionPolicy.HasSelectableEmotionControls(_selectedVoice);
     private IReadOnlyList<TtsExpressionOption> TencentEmotionOptions => TencentEmotionPolicy.GetOptions();
+    private static IReadOnlyList<TtsExpressionOption> CartesiaEmotionOptions { get; } = new List<TtsExpressionOption>
+    {
+        new() { Id = "neutral", Name = "中性" },
+        new() { Id = "happy", Name = "开心" },
+        new() { Id = "excited", Name = "兴奋" },
+        new() { Id = "calm", Name = "平静" },
+        new() { Id = "curious", Name = "好奇" },
+        new() { Id = "sad", Name = "悲伤" },
+        new() { Id = "angry", Name = "生气" },
+        new() { Id = "surprised", Name = "惊讶" }
+    };
     private bool HasTencentEmotionControls => IsTencent;
 
     private IEnumerable<TtsExpressionOption> GetHuoshanEmotionOptions(VoiceOption voice)
@@ -663,6 +694,9 @@
 
         if (IsTencent)
             return TencentEmotionPolicy.ToRequestEmotion(_selectedEmotion);
+
+        if (IsCartesia)
+            return _selectedEmotion;
 
         return "";
     }

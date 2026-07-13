@@ -10,6 +10,13 @@
 
 ## 2026-07-14 迭代记录
 
+- [x] **接入 Cartesia Sonic TTS bytes 生成与在线音色库**
+  - 已完成：新增 `CartesiaTtsProvider`，按官方 `POST https://api.cartesia.ai/tts/bytes` 生成音频，使用 Bearer 鉴权并固定 `Cartesia-Version: 2026-03-01`；支持 `sonic-3.5`、`sonic-3`、`sonic-latest`。
+  - 已完成：映射 MP3（44.1 kHz / 128 kbps）与 WAV（PCM S16LE / 44.1 kHz），支持速度 `0.6..1.5`、音量 `0.5..2.0`、SSML transcript 和 `generation_config.emotion`；输出继续使用原子唯一文件预留，失败写入会清理空文件。
+  - 已完成：接入 `GET https://api.cartesia.ai/voices`，解析 `data[]` 的音色 ID、名称、语言、性别、描述和标签；设置页增加 `CARTESIA_API_KEY` 文案，首页增加本地 Cartesia SVG，工作区增加常用 Cartesia 情感选择。
+  - 已验证：按 TDD 先因缺少 `CartesiaTtsProvider` 得到 `CS0246/CS0103`；实现后 fake HTTP 覆盖官方 URI、Bearer、版本头、模型/音色、格式、速度/音量/情感、SSML、精确音频落盘与音色刷新，桌面全部自检通过，Local API 35/35，解决方案构建 0 警告、0 错误。未提供真实 Cartesia Key，因此未执行计费生成。
+  - 关联缺口：继续推进“接入更多厂商 API TTS 生成能力”、P0-01、P1-07、P2-10 和 P2-11；WebSocket/SSE、时间戳、克隆、词典和更细采样率/码率暂未接入。
+
 - [x] **完成本地 API 设置界面、Dify 指南与运行时烟测**
   - 已完成：设置页新增本地 TTS API 卡片，可控制启停、端口和 Docker/局域网访问，实时显示运行/故障状态与实际监听地址；支持 Token 显示、复制、重新生成，以及显式“保存并重启 API”。
   - 已完成：新增 `Docs/guides/DIFY_LOCAL_TTS_API.md`，覆盖 loopback、`host.docker.internal`、局域网、Bearer 鉴权、Dify OpenAPI/HTTP Request、JSON 与二进制生成、下载、curl、云端安全和常见错误排查；README 已同步 12 家现有桌面厂商。

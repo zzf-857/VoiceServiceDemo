@@ -518,6 +518,58 @@ public static class VendorRegistry
                 new VoiceOption { Id = "shimmer", Name = "Shimmer (微光)", Gender = "女", Language = "多语言" },
             }
         },
+        new VendorConfig
+        {
+            Id = "cartesia",
+            Name = "Cartesia",
+            Description = "面向实时语音代理的低延迟多语言 Sonic TTS。",
+            IconName = "audio-waveform",
+            ApiBaseUrl = "https://api.cartesia.ai",
+            DocumentationUrl = "https://docs.cartesia.ai/api-reference/tts/bytes",
+            ImportantLinks = new()
+            {
+                new VendorLink
+                {
+                    Label = "音色列表 API",
+                    Url = "https://docs.cartesia.ai/api-reference/voices/list",
+                    Description = "查看 Cartesia 在线音色列表契约"
+                },
+                new VendorLink
+                {
+                    Label = "API Keys",
+                    Url = "https://play.cartesia.ai/keys",
+                    Description = "创建和管理 Cartesia API Key"
+                }
+            },
+            Capabilities = new VendorCapabilities
+            {
+                SupportsSsml = true,
+                SupportsEmotion = true,
+                SupportedInputFormats = new() { TtsInputFormat.PlainText, TtsInputFormat.Ssml },
+                SupportedOutputFormats = new() { "mp3", "wav" }
+            },
+            SpeedDef = new TtsParameterDef { Min = 0.6, Max = 1.5, Default = 1.0, Step = 0.1 },
+            VolumeDef = new TtsParameterDef { Min = 0.5, Max = 2.0, Default = 1.0, Step = 0.1 },
+            SupportsModelFetch = false,
+            SupportsVoiceFetch = true,
+            DefaultModels = new()
+            {
+                new VoiceModel { Id = "sonic-3.5", Name = "Sonic 3.5" },
+                new VoiceModel { Id = "sonic-3", Name = "Sonic 3" },
+                new VoiceModel { Id = "sonic-latest", Name = "Sonic Latest" }
+            },
+            DefaultVoices = new()
+            {
+                new VoiceOption
+                {
+                    Id = "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4",
+                    Name = "Skylar - Friendly Guide",
+                    Gender = "女",
+                    Language = "英文",
+                    Categories = new() { "官方示例", "Friendly" }
+                }
+            }
+        },
     };
 
     public static VendorConfig? GetById(string id) => All.FirstOrDefault(v => v.Id == id);

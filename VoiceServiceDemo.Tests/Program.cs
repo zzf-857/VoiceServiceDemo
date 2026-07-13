@@ -1622,6 +1622,111 @@ AssertEqual("Token deepgram-key", deepgramVoiceHandler.RequestAuthorizationHeade
 
 Console.WriteLine("Deepgram provider request body and model parser tests passed.");
 
+var cartesiaAudioBytes = new byte[] { 0x49, 0x44, 0x33, 0x04, 0x00, 0x01 };
+var cartesiaSettings = new SettingsService();
+cartesiaSettings.Settings.OutputDirectory = Path.Combine(Path.GetTempPath(), "VoiceServiceDemoTests", Guid.NewGuid().ToString("N"));
+var cartesiaHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new ByteArrayContent(cartesiaAudioBytes)
+    });
+var cartesiaResult = await new CartesiaTtsProvider(new HttpClient(cartesiaHandler), cartesiaSettings)
+    .GenerateAsync(new TtsRequest
+    {
+        VendorId = "cartesia",
+        ModelId = "sonic-3.5",
+        VoiceId = "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4",
+        Text = "Hello from Cartesia.",
+        Speed = 1.2,
+        Volume = 0.8,
+        Emotion = "happy",
+        OutputFormat = "mp3"
+    }, "cartesia-key");
+AssertTrue(cartesiaResult.Success, "Cartesia fake generation succeeds");
+AssertTrue(cartesiaResult.FilePath?.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) == true, "Cartesia MP3 generation saves mp3 file");
+AssertTrue(File.Exists(cartesiaResult.FilePath!), "Cartesia fake generation writes output file");
+AssertTrue((await File.ReadAllBytesAsync(cartesiaResult.FilePath!)).SequenceEqual(cartesiaAudioBytes), "Cartesia writes exact returned audio bytes");
+AssertEqual("https://api.cartesia.ai/tts/bytes", cartesiaHandler.RequestUris.Single()?.AbsoluteUri, "Cartesia generation uses official bytes endpoint");
+AssertEqual("Bearer cartesia-key", cartesiaHandler.RequestAuthorizationHeaders.Single(), "Cartesia generation sends Bearer authorization");
+AssertEqual("2026-03-01", cartesiaHandler.RequestHeaderValues.Single()["Cartesia-Version"], "Cartesia pins the official API version");
+using (var cartesiaRequest = JsonDocument.Parse(cartesiaHandler.RequestBodies.Single()))
+{
+    AssertEqual("sonic-3.5", cartesiaRequest.RootElement.GetProperty("model_id").GetString(), "Cartesia request sends selected model");
+    AssertEqual("Hello from Cartesia.", cartesiaRequest.RootElement.GetProperty("transcript").GetString(), "Cartesia request sends transcript");
+    AssertEqual("id", cartesiaRequest.RootElement.GetProperty("voice").GetProperty("mode").GetString(), "Cartesia request uses voice id mode");
+    AssertEqual("db6b0ed5-d5d3-463d-ae85-518a07d3c2b4", cartesiaRequest.RootElement.GetProperty("voice").GetProperty("id").GetString(), "Cartesia request sends voice id");
+    AssertEqual("mp3", cartesiaRequest.RootElement.GetProperty("output_format").GetProperty("container").GetString(), "Cartesia request maps MP3 container");
+    AssertEqual(44100, cartesiaRequest.RootElement.GetProperty("output_format").GetProperty("sample_rate").GetInt32(), "Cartesia request sends MP3 sample rate");
+    AssertEqual(128000, cartesiaRequest.RootElement.GetProperty("output_format").GetProperty("bit_rate").GetInt32(), "Cartesia request sends MP3 bit rate");
+    var generationConfig = cartesiaRequest.RootElement.GetProperty("generation_config");
+    AssertEqual(1.2, generationConfig.GetProperty("speed").GetDouble(), "Cartesia request sends speed");
+    AssertEqual(0.8, generationConfig.GetProperty("volume").GetDouble(), "Cartesia request sends volume");
+    AssertEqual("happy", generationConfig.GetProperty("emotion").GetString(), "Cartesia request sends emotion");
+}
+
+var cartesiaSsmlJson = CartesiaTtsProvider.BuildRequestJson(new TtsRequest
+{
+    VendorId = "cartesia",
+    ModelId = "sonic-3",
+    VoiceId = "voice-ssml",
+    Text = "ignored",
+    InputFormat = TtsInputFormat.Ssml,
+    SsmlText = "<speak>Hello <break time=\"200ms\"/></speak>",
+    Speed = 4,
+    Volume = 0.1,
+    OutputFormat = "wav"
+});
+using (var cartesiaSsmlRequest = JsonDocument.Parse(cartesiaSsmlJson))
+{
+    AssertEqual("<speak>Hello <break time=\"200ms\"/></speak>", cartesiaSsmlRequest.RootElement.GetProperty("transcript").GetString(), "Cartesia SSML request uses ssml text");
+    AssertEqual("wav", cartesiaSsmlRequest.RootElement.GetProperty("output_format").GetProperty("container").GetString(), "Cartesia request maps WAV container");
+    AssertEqual("pcm_s16le", cartesiaSsmlRequest.RootElement.GetProperty("output_format").GetProperty("encoding").GetString(), "Cartesia WAV request sends PCM encoding");
+    AssertEqual(1.5, cartesiaSsmlRequest.RootElement.GetProperty("generation_config").GetProperty("speed").GetDouble(), "Cartesia request clamps speed");
+    AssertEqual(0.5, cartesiaSsmlRequest.RootElement.GetProperty("generation_config").GetProperty("volume").GetDouble(), "Cartesia request clamps volume");
+}
+
+var cartesiaVoicesJson = """
+{
+  "data": [
+    {
+      "id": "voice-1",
+      "name": "Skylar",
+      "language": "en",
+      "gender": "female",
+      "description": "Friendly guide"
+    },
+    {
+      "id": "voice-2",
+      "name": "Mateo",
+      "language": "es",
+      "gender": "male"
+    }
+  ]
+}
+""";
+var cartesiaVoices = CartesiaTtsProvider.ParseVoicesJson(cartesiaVoicesJson);
+AssertEqual(2, cartesiaVoices.Count, "Cartesia voice parser returns all voices");
+AssertEqual("voice-1", cartesiaVoices[0].Id, "Cartesia voice parser maps id");
+AssertEqual("Skylar", cartesiaVoices[0].Name, "Cartesia voice parser maps name");
+AssertEqual("女", cartesiaVoices[0].Gender, "Cartesia voice parser localizes female gender");
+AssertEqual("en", cartesiaVoices[0].Language, "Cartesia voice parser maps language");
+AssertTrue(cartesiaVoices[0].Categories.Contains("Friendly guide"), "Cartesia voice parser keeps description metadata");
+AssertEqual("男", cartesiaVoices[1].Gender, "Cartesia voice parser localizes male gender");
+
+var cartesiaVoiceHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new StringContent(cartesiaVoicesJson, System.Text.Encoding.UTF8, "application/json")
+    });
+var cartesiaFetchedVoices = await new CartesiaTtsProvider(new HttpClient(cartesiaVoiceHandler), cartesiaSettings)
+    .FetchVoicesAsync("cartesia-key");
+AssertEqual(2, cartesiaFetchedVoices.Count, "Cartesia fake voice fetch returns parsed voices");
+AssertEqual("https://api.cartesia.ai/voices", cartesiaVoiceHandler.RequestUris.Single()?.AbsoluteUri, "Cartesia voice fetch uses official voices endpoint");
+AssertEqual("Bearer cartesia-key", cartesiaVoiceHandler.RequestAuthorizationHeaders.Single(), "Cartesia voice fetch sends Bearer authorization");
+AssertEqual("2026-03-01", cartesiaVoiceHandler.RequestHeaderValues.Single()["Cartesia-Version"], "Cartesia voice fetch pins API version");
+
+Console.WriteLine("Cartesia provider request body and voice parser tests passed.");
+
 var googlePlainJson = GoogleTtsProvider.BuildSynthesizeRequestJson(new TtsRequest
 {
     VendorId = "google",
@@ -1819,6 +1924,14 @@ AssertTrue(deepgramVendor.Capabilities.SupportedOutputFormats.Contains("flac"), 
 AssertTrue(deepgramVendor.DefaultModels.Any(model => model.Id == "aura-2-thalia-en"), "Deepgram vendor exposes Aura 2 Thalia model");
 AssertTrue(deepgramVendor.DefaultVoices.Any(voice => voice.Id == "aura-2-apollo-en"), "Deepgram vendor exposes official Apollo example voice");
 
+var cartesiaVendor = VendorRegistry.GetById("cartesia") ?? throw new Exception("Cartesia vendor config is missing");
+AssertTrue(cartesiaVendor.SupportsVoiceFetch, "Cartesia vendor enables online voice refresh");
+AssertTrue(cartesiaVendor.Capabilities.SupportsSsml, "Cartesia vendor exposes SSML support");
+AssertTrue(cartesiaVendor.Capabilities.SupportsEmotion, "Cartesia vendor exposes emotion support");
+AssertTrue(cartesiaVendor.Capabilities.SupportedOutputFormats.SequenceEqual(new[] { "mp3", "wav" }), "Cartesia vendor exposes supported output formats");
+AssertTrue(cartesiaVendor.DefaultModels.Any(model => model.Id == "sonic-3.5"), "Cartesia vendor exposes Sonic 3.5");
+AssertTrue(cartesiaVendor.DefaultVoices.Any(voice => voice.Id == "db6b0ed5-d5d3-463d-ae85-518a07d3c2b4"), "Cartesia vendor exposes official Skylar example voice");
+
 Console.WriteLine("Vendor capabilities registry tests passed.");
 
 var settingsRazorPath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "Components", "Pages", "Settings.razor");
@@ -1834,6 +1947,7 @@ AssertTrue(settingsMarkup.Contains("MINIMAX_API_KEY"), "Settings explains MiniMa
 AssertTrue(settingsMarkup.Contains("ELEVENLABS_API_KEY"), "Settings explains ElevenLabs credential naming");
 AssertTrue(settingsMarkup.Contains("FISH_AUDIO_API_KEY"), "Settings explains Fish Audio credential naming");
 AssertTrue(settingsMarkup.Contains("DEEPGRAM_API_KEY"), "Settings explains Deepgram credential naming");
+AssertTrue(settingsMarkup.Contains("CARTESIA_API_KEY"), "Settings explains Cartesia credential naming");
 AssertTrue(settingsMarkup.Contains("本地 TTS API"), "Settings exposes local API controls");
 AssertTrue(settingsMarkup.Contains("DesktopLocalApiService"), "Settings reads live API status");
 AssertTrue(settingsMarkup.Contains("host.docker.internal"), "Settings explains local Docker address");
@@ -1876,6 +1990,7 @@ AssertTrue(homeMarkup.Contains("assets/vendor-icons/minimax.ico"), "Home page us
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/elevenlabs.svg"), "Home page uses local ElevenLabs brand icon");
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/fish_audio.svg"), "Home page uses local Fish Audio brand icon");
 AssertTrue(homeMarkup.Contains("assets/vendor-icons/deepgram.svg"), "Home page uses local Deepgram brand icon");
+AssertTrue(homeMarkup.Contains("assets/vendor-icons/cartesia.svg"), "Home page uses local Cartesia brand icon");
 
 var vendorIconRoot = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "wwwroot", "assets", "vendor-icons");
 foreach (var iconFile in new[]
@@ -1891,7 +2006,8 @@ foreach (var iconFile in new[]
     "minimax.ico",
     "elevenlabs.svg",
     "fish_audio.svg",
-    "deepgram.svg"
+    "deepgram.svg",
+    "cartesia.svg"
 })
 {
     var iconPath = Path.Combine(vendorIconRoot, iconFile);
@@ -1915,6 +2031,8 @@ AssertTrue(workspaceMarkup.Contains("OutputFormat ="), "Workspace sends selected
 AssertTrue(workspaceMarkup.Contains("OnModelChanged"), "Workspace recalculates output options when model changes");
 AssertTrue(workspaceMarkup.Contains("AliyunTtsProvider.GetSupportedOutputFormatsForModel"), "Workspace narrows Aliyun output formats by selected model");
 AssertTrue(workspaceMarkup.Contains("小米 MiMo 使用朗读指导"), "Workspace gives Xiaomi MiMo-specific instruction guidance");
+AssertTrue(workspaceMarkup.Contains("CartesiaEmotionOptions"), "Workspace renders Cartesia emotion options");
+AssertTrue(workspaceMarkup.Contains("Cartesia 使用 generation_config.emotion"), "Workspace gives Cartesia emotion guidance");
 AssertTrue(workspaceMarkup.Contains("mimo-v2.5-tts"), "Workspace enables instructions for Xiaomi MiMo TTS model");
 AssertTrue(workspaceMarkup.Contains("请检查该厂商凭证"), "Workspace uses generic voice refresh credential guidance");
 
@@ -1937,7 +2055,7 @@ AssertTrue(File.Exists(Path.Combine(repositoryRoot, "scripts", "local_api_smoke.
 
 var readme = await File.ReadAllTextAsync(Path.Combine(repositoryRoot, "README.md"));
 AssertTrue(readme.Contains("DIFY_LOCAL_TTS_API.md"), "README links the Dify local API guide");
-AssertTrue(readme.Contains("12 家"), "README documents all twelve desktop vendors");
+AssertTrue(readme.Contains($"{VendorRegistry.All.Count} 家"), "README documents the current desktop vendor count");
 
 var legacyMcpReadme = await File.ReadAllTextAsync(Path.Combine(repositoryRoot, "VoiceServiceMcp", "README.md"));
 AssertTrue(legacyMcpReadme.Contains("独立旧版 MCP"), "Legacy MCP README distinguishes the independent server from the desktop REST API");

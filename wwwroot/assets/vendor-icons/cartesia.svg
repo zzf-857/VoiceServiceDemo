@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Cartesia</title>
+  <defs>
+    <linearGradient id="cartesia-gradient" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6D5EF8"/>
+      <stop offset="1" stop-color="#2DD4BF"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#111827"/>
+  <path d="M46 20.5A19 19 0 1 0 46 43.5" fill="none" stroke="url(#cartesia-gradient)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M24 32h3m4-8v16m7-12v8m6-5v2" fill="none" stroke="#F8FAFC" stroke-width="3.5" stroke-linecap="round"/>
+</svg>
