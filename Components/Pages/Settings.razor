@@ -1,7 +1,10 @@
 @page "/settings"
+@using VoiceServiceLocalApi
+@implements IDisposable
 
 @inject SettingsService SettingsService
 @inject TtsService TtsService
+@inject DesktopLocalApiService LocalApiService
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
@@ -213,6 +216,107 @@
     </div>
 </div>
 
+<div class="settings-section local-api-section" style="margin-top: 24px;">
+    <div class="local-api-heading">
+        <div>
+            <h3>本地 TTS API</h3>
+            <p>让 Dify、脚本或其他本机程序复用桌面端已配置的 12 家 TTS 厂商。</p>
+        </div>
+        <span class="local-api-status @LocalApiStatusClass">
+            <span class="local-api-status-dot"></span>
+            @LocalApiStatusText
+        </span>
+    </div>
+
+    <div class="settings-box local-api-card">
+        <div class="local-api-grid">
+            <label class="local-api-field local-api-toggle-field">
+                <span class="credential-field-label">启用本地 API</span>
+                <span class="local-api-toggle-line">
+                    <input type="checkbox"
+                           checked="@SettingsService.Settings.LocalApi.Enabled"
+                           @onchange="OnLocalApiEnabledChanged" />
+                    <span>随桌面软件启动和停止</span>
+                </span>
+            </label>
+
+            <label class="local-api-field">
+                <span class="credential-field-label">监听端口</span>
+                <input type="number" min="1024" max="65535"
+                       value="@SettingsService.Settings.LocalApi.Port"
+                       @onchange="OnLocalApiPortChanged" />
+                <span class="credential-field-hint">允许范围 1024–65535，默认 5055。</span>
+            </label>
+
+            <label class="local-api-field local-api-toggle-field">
+                <span class="credential-field-label">允许 Docker / 局域网访问</span>
+                <span class="local-api-toggle-line">
+                    <input type="checkbox"
+                           checked="@SettingsService.Settings.LocalApi.AllowRemote"
+                           @onchange="OnLocalApiRemoteChanged" />
+                    <span>绑定所有本机网络接口</span>
+                </span>
+                <span class="credential-field-hint warning">不会自动修改 Windows 防火墙，也不应直接暴露到公网。</span>
+            </label>
+        </div>
+
+        <div class="local-api-endpoints">
+            <div>
+                <span>本机地址</span>
+                <code>@ConfiguredBaseUrl</code>
+            </div>
+            <div>
+                <span>OpenAPI</span>
+                <code>@ConfiguredOpenApiUrl</code>
+            </div>
+            <div>
+                <span>Dify Docker</span>
+                <code>http://host.docker.internal:@SettingsService.Settings.LocalApi.Port</code>
+            </div>
+        </div>
+
+        <div class="local-api-token-block">
+            <div class="credential-field-label">Bearer Token</div>
+            <div class="local-api-token-row">
+                <input type="@(_showLocalApiToken ? "text" : "password")"
+                       value="@SettingsService.Settings.LocalApi.AccessToken"
+                       readonly
+                       aria-label="本地 API Bearer Token" />
+                <button type="button" class="btn btn-outline" @onclick="ToggleLocalApiToken">
+                    @(_showLocalApiToken ? "隐藏" : "显示")
+                </button>
+                <button type="button" class="btn btn-outline" @onclick="CopyLocalApiToken">
+                    @(_copiedVendor == "local-api-token" ? "✓ 已复制" : "复制")
+                </button>
+                <button type="button" class="btn btn-outline danger-outline" @onclick="RegenerateLocalApiToken" disabled="@_savingLocalApi">
+                    重新生成 Token
+                </button>
+            </div>
+            <div class="credential-field-hint">Token 只保存在本机配置中；重新生成后旧 Token 会立即失效。</div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(LocalApiService.LastError))
+        {
+            <div class="local-api-message error">@LocalApiService.LastError</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(_localApiMessage))
+        {
+            <div class="local-api-message @(_localApiMessageIsError ? "error" : "success")">@_localApiMessage</div>
+        }
+
+        <div class="local-api-actions">
+            <a class="btn btn-outline" href="https://github.com/zzf-857/VoiceServiceDemo/blob/master/Docs/guides/DIFY_LOCAL_TTS_API.md" target="_blank">Dify 接入指南</a>
+            <button type="button" class="btn btn-primary" @onclick="SaveAndRestartLocalApi" disabled="@_savingLocalApi">
+                @if (_savingLocalApi)
+                {
+                    <span class="spinner" style="width:14px;height:14px;border-width:2px;"></span>
+                }
+                <span>保存并重启 API</span>
+            </button>
+        </div>
+    </div>
+</div>
+
 <div class="settings-section" style="margin-top: 24px;">
     <h3>API Base URL 一览</h3>
     <div class="settings-box">
@@ -294,6 +398,23 @@
     private string? _copiedVendor = null;
     private System.Threading.CancellationTokenSource? _copyCts;
     private bool _scrolledToFocus = false;
+    private bool _showLocalApiToken;
+    private bool _savingLocalApi;
+    private string? _localApiMessage;
+    private bool _localApiMessageIsError;
+
+    private string ConfiguredBaseUrl => $"http://127.0.0.1:{SettingsService.Settings.LocalApi.Port}";
+    private string ConfiguredOpenApiUrl => $"{ConfiguredBaseUrl}/openapi/v1.json";
+    private string LocalApiStatusClass => LocalApiService.Status.ToString().ToLowerInvariant();
+    private string LocalApiStatusText => LocalApiService.Status switch
+    {
+        LocalApiRuntimeStatus.Stopped => "已停止",
+        LocalApiRuntimeStatus.Starting => "启动中",
+        LocalApiRuntimeStatus.Running => $"运行中 · {LocalApiService.BaseUrl}",
+        LocalApiRuntimeStatus.Stopping => "停止中",
+        LocalApiRuntimeStatus.Faulted => "启动失败",
+        _ => "未知状态"
+    };
 
     private bool HasFocusedVendor =>
         !string.IsNullOrWhiteSpace(FocusVendorId) && VendorRegistry.GetById(FocusVendorId) != null;
@@ -307,6 +428,97 @@
         {
             _tempKeys[vendor.Id] = SettingsService.GetApiKey(vendor.Id);
         }
+        LocalApiService.StatusChanged += OnLocalApiStatusChanged;
+    }
+
+    private void OnLocalApiStatusChanged(object? sender, EventArgs e) =>
+        _ = InvokeAsync(StateHasChanged);
+
+    private void OnLocalApiEnabledChanged(ChangeEventArgs e)
+    {
+        SettingsService.Settings.LocalApi.Enabled = e.Value is bool value && value;
+        ClearLocalApiMessage();
+    }
+
+    private void OnLocalApiRemoteChanged(ChangeEventArgs e)
+    {
+        SettingsService.Settings.LocalApi.AllowRemote = e.Value is bool value && value;
+        ClearLocalApiMessage();
+    }
+
+    private void OnLocalApiPortChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var port) && port is >= 1024 and <= 65535)
+        {
+            SettingsService.Settings.LocalApi.Port = port;
+            ClearLocalApiMessage();
+            return;
+        }
+
+        _localApiMessage = "端口必须是 1024–65535 之间的整数。";
+        _localApiMessageIsError = true;
+    }
+
+    private void ToggleLocalApiToken() => _showLocalApiToken = !_showLocalApiToken;
+
+    private async Task CopyLocalApiToken() =>
+        await CopyToClipboard("local-api-token", SettingsService.Settings.LocalApi.AccessToken);
+
+    private async Task RegenerateLocalApiToken()
+    {
+        SettingsService.Settings.LocalApi.AccessToken = LocalApiToken.Generate();
+        _showLocalApiToken = true;
+        await SaveAndRestartLocalApi("Token 已重新生成；旧 Token 已失效。");
+    }
+
+    private Task SaveAndRestartLocalApi() => SaveAndRestartLocalApi(null);
+
+    private async Task SaveAndRestartLocalApi(string? successMessage)
+    {
+        if (SettingsService.Settings.LocalApi.Port is < 1024 or > 65535)
+        {
+            _localApiMessage = "端口必须是 1024–65535 之间的整数。";
+            _localApiMessageIsError = true;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(SettingsService.Settings.LocalApi.AccessToken))
+            SettingsService.Settings.LocalApi.AccessToken = LocalApiToken.Generate();
+
+        _savingLocalApi = true;
+        ClearLocalApiMessage();
+        try
+        {
+            SettingsService.Save();
+            var started = await LocalApiService.RestartAsync();
+            if (!started)
+            {
+                _localApiMessage = LocalApiService.LastError ?? "本地 API 启动失败，请检查端口设置。";
+                _localApiMessageIsError = true;
+            }
+            else
+            {
+                _localApiMessage = successMessage ?? (SettingsService.Settings.LocalApi.Enabled
+                    ? "设置已保存，本地 API 已重启。"
+                    : "设置已保存，本地 API 已停止。");
+            }
+        }
+        catch (Exception ex)
+        {
+            _localApiMessage = $"保存或重启失败：{ex.Message}";
+            _localApiMessageIsError = true;
+        }
+        finally
+        {
+            _savingLocalApi = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ClearLocalApiMessage()
+    {
+        _localApiMessage = null;
+        _localApiMessageIsError = false;
     }
 
     private string GetApiKey(string vendorId) =>
@@ -500,4 +712,11 @@
         vendorId == "huoshan"
             ? HuoshanCredentials.Parse(GetApiKey(vendorId)).HasSpeechCredentials || HuoshanCredentials.Parse(GetApiKey(vendorId)).HasV3ApiKeyCredentials
             : !string.IsNullOrWhiteSpace(GetApiKey(vendorId));
+
+    public void Dispose()
+    {
+        LocalApiService.StatusChanged -= OnLocalApiStatusChanged;
+        _copyCts?.Cancel();
+        _copyCts?.Dispose();
+    }
 }

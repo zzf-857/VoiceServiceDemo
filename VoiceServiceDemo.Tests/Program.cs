@@ -1834,6 +1834,11 @@ AssertTrue(settingsMarkup.Contains("MINIMAX_API_KEY"), "Settings explains MiniMa
 AssertTrue(settingsMarkup.Contains("ELEVENLABS_API_KEY"), "Settings explains ElevenLabs credential naming");
 AssertTrue(settingsMarkup.Contains("FISH_AUDIO_API_KEY"), "Settings explains Fish Audio credential naming");
 AssertTrue(settingsMarkup.Contains("DEEPGRAM_API_KEY"), "Settings explains Deepgram credential naming");
+AssertTrue(settingsMarkup.Contains("本地 TTS API"), "Settings exposes local API controls");
+AssertTrue(settingsMarkup.Contains("DesktopLocalApiService"), "Settings reads live API status");
+AssertTrue(settingsMarkup.Contains("host.docker.internal"), "Settings explains local Docker address");
+AssertTrue(settingsMarkup.Contains("重新生成 Token"), "Settings can rotate the access token");
+AssertTrue(settingsMarkup.Contains("保存并重启 API"), "Settings can persist and restart the local API");
 
 var mainWindowCodePath = Path.Combine(FindRepositoryRoot(AppContext.BaseDirectory), "MainWindow.xaml.cs");
 var mainWindowCode = await File.ReadAllTextAsync(mainWindowCodePath);
@@ -1924,6 +1929,18 @@ AssertTrue(appCss.Contains("@media (max-width: 1360px)"), "Workspace stacks befo
 AssertFalse(appCss.Contains("grid-template-columns: minmax(620px, 1fr) minmax(340px, 372px);"), "Workspace grid does not keep oversized fixed minimum columns");
 AssertTrue(appCss.Contains("grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);"), "Workspace grid uses a flexible main column and a bounded control column");
 AssertTrue(appCss.Contains("grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));"), "Voice card grid adapts to available content width instead of viewport breakpoints");
+AssertTrue(appCss.Contains(".local-api-status"), "Local API status has dedicated styling");
+
+var repositoryRoot = FindRepositoryRoot(AppContext.BaseDirectory);
+AssertTrue(File.Exists(Path.Combine(repositoryRoot, "Docs", "guides", "DIFY_LOCAL_TTS_API.md")), "Dify guide exists");
+AssertTrue(File.Exists(Path.Combine(repositoryRoot, "scripts", "local_api_smoke.ps1")), "Local API smoke script exists");
+
+var readme = await File.ReadAllTextAsync(Path.Combine(repositoryRoot, "README.md"));
+AssertTrue(readme.Contains("DIFY_LOCAL_TTS_API.md"), "README links the Dify local API guide");
+AssertTrue(readme.Contains("12 家"), "README documents all twelve desktop vendors");
+
+var legacyMcpReadme = await File.ReadAllTextAsync(Path.Combine(repositoryRoot, "VoiceServiceMcp", "README.md"));
+AssertTrue(legacyMcpReadme.Contains("独立旧版 MCP"), "Legacy MCP README distinguishes the independent server from the desktop REST API");
 
 Console.WriteLine("Settings credential UX markup tests passed.");
 

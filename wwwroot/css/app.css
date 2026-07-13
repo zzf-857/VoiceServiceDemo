@@ -1791,6 +1791,233 @@ html, body, #app {
 }
 
 /* ============================
+   本地 TTS API 设置
+   ============================ */
+
+.local-api-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 12px;
+}
+
+.local-api-heading h3 {
+    margin-bottom: 4px;
+}
+
+.local-api-heading p {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin: 0;
+}
+
+.local-api-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    border: 1px solid var(--border-default);
+    border-radius: 999px;
+    padding: 7px 12px;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.local-api-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #94a3b8;
+}
+
+.local-api-status.running {
+    color: #86efac;
+    border-color: rgba(74, 222, 128, 0.35);
+    background: rgba(22, 163, 74, 0.1);
+}
+
+.local-api-status.running .local-api-status-dot {
+    background: #4ade80;
+    box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.12);
+}
+
+.local-api-status.starting,
+.local-api-status.stopping {
+    color: #fde68a;
+    border-color: rgba(250, 204, 21, 0.3);
+}
+
+.local-api-status.starting .local-api-status-dot,
+.local-api-status.stopping .local-api-status-dot {
+    background: #facc15;
+}
+
+.local-api-status.faulted {
+    color: #fca5a5;
+    border-color: rgba(248, 113, 113, 0.35);
+    background: rgba(220, 38, 38, 0.08);
+}
+
+.local-api-status.faulted .local-api-status-dot {
+    background: #f87171;
+}
+
+.local-api-card {
+    display: grid;
+    gap: 20px;
+}
+
+.local-api-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.local-api-field {
+    display: grid;
+    align-content: start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.local-api-field input[type="number"],
+.local-api-token-row input {
+    width: 100%;
+}
+
+.local-api-toggle-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 38px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.local-api-toggle-line input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--accent-primary);
+}
+
+.credential-field-hint.warning {
+    color: #fbbf24;
+}
+
+.local-api-endpoints {
+    display: grid;
+    gap: 8px;
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.local-api-endpoints > div {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+}
+
+.local-api-endpoints span {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.local-api-endpoints code {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.local-api-token-block {
+    display: grid;
+    gap: 8px;
+}
+
+.local-api-token-row {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) auto auto auto;
+    gap: 8px;
+}
+
+.danger-outline {
+    color: #fca5a5;
+    border-color: rgba(248, 113, 113, 0.35);
+}
+
+.local-api-message {
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+.local-api-message.success {
+    color: #86efac;
+    background: rgba(22, 163, 74, 0.1);
+    border: 1px solid rgba(74, 222, 128, 0.25);
+}
+
+.local-api-message.error {
+    color: #fca5a5;
+    background: rgba(220, 38, 38, 0.08);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+}
+
+.local-api-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+}
+
+@media (max-width: 980px) {
+    .local-api-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .local-api-token-row {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .local-api-token-row input {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 620px) {
+    .local-api-heading,
+    .local-api-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .local-api-status {
+        align-self: flex-start;
+    }
+
+    .local-api-token-row {
+        grid-template-columns: 1fr;
+    }
+
+    .local-api-token-row input {
+        grid-column: auto;
+    }
+
+    .local-api-endpoints > div {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
+}
+
+/* ============================
    滚动条
    ============================ */
 

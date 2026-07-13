@@ -10,6 +10,13 @@
 
 ## 2026-07-14 迭代记录
 
+- [x] **完成本地 API 设置界面、Dify 指南与运行时烟测**
+  - 已完成：设置页新增本地 TTS API 卡片，可控制启停、端口和 Docker/局域网访问，实时显示运行/故障状态与实际监听地址；支持 Token 显示、复制、重新生成，以及显式“保存并重启 API”。
+  - 已完成：新增 `Docs/guides/DIFY_LOCAL_TTS_API.md`，覆盖 loopback、`host.docker.internal`、局域网、Bearer 鉴权、Dify OpenAPI/HTTP Request、JSON 与二进制生成、下载、curl、云端安全和常见错误排查；README 已同步 12 家现有桌面厂商。
+  - 已完成：旧 `VoiceServiceMcp` 文档明确标记为独立旧版 MCP，避免把无桌面生命周期的 `/mcp/sse` 与新 REST API 混用；新增不打印或持久化 Token 的 `scripts/local_api_smoke.ps1`。
+  - 已验证：标准 xUnit 共 35 项通过，其中真实 Kestrel Host 会调用烟测脚本检查健康、401、厂商列表和 OpenAPI，并断言 stdout/stderr 不泄漏 Token；桌面自检全部通过，解决方案构建 0 警告、0 错误。未提供付费厂商凭证，因此本轮未执行真实计费生成，生成/下载链路由 fake gateway HTTP 集成测试覆盖。
+  - 关联缺口：完成 P0-01、P0-02 和本地 Dify 调用交付，推进 P2-10、P2-11、P2-21、P2-22、P3-03、P3-06；公网托管、凭证加密、旧 MCP 协议现代化和新厂商接入仍保持未完成。
+
 - [x] **本地 API 复用桌面能力并随软件生命周期启停**
   - 已完成：`AppSettings` 新增默认启用的本地 API 配置，首次启动自动生成并立即持久化 256 位访问 Token；非法端口、并发数和文本上限会恢复安全默认值，测试可使用隔离配置路径。
   - 已完成：新增 `DesktopTtsGateway`，把桌面 12 家厂商、模型、能力、参数范围和默认音色映射到外部契约，只暴露 `configured` 布尔值；生成请求复用桌面 `TtsService`、现有凭证和输出目录，缺凭证与参数错误使用稳定错误码。

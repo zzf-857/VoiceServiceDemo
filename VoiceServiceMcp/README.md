@@ -1,12 +1,16 @@
-# VoiceServiceMcp - 多厂商 TTS MCP 服务器
+# VoiceServiceMcp - 独立旧版 MCP 服务器
 
-将多个 TTS 厂商（火山引擎、OpenAI、阿里云等）封装为 MCP (Model Context Protocol) 服务，支持跨设备网络调用。
+这是仓库早期的独立 MCP 实验服务，使用自己的环境变量、厂商注册表、输出目录和进程生命周期。它不会随 VoiceOps 桌面软件启动，也不会复用桌面设置页中的凭证。
+
+> **请勿与桌面 REST API 混淆：** Dify、curl 或普通外部程序应优先使用桌面软件内置的 `/api/v1/tts`、`/api/v1/tts/audio` 和 OpenAPI。完整说明见 [Dify 本地 TTS API 接入指南](../Docs/guides/DIFY_LOCAL_TTS_API.md)。本目录的入口是 `/mcp/sse`，协议、端口和鉴权状态均不同。
+
+当前旧 MCP 的工具 schema 保留了 6 家历史厂商声明，但运行时注册表只有火山引擎和 OpenAI 得到维护；阿里云、百度、Azure、Google 的声明与实现尚未完成收敛。需要 12 家桌面 Provider 时，请使用新 REST API。
 
 ## 🌟 特性
 
 - ✅ **跨平台支持**：Windows、macOS、Linux
-- ✅ **多厂商支持**：火山引擎、OpenAI、阿里云、百度、Azure、Google
-- ✅ **MCP 协议**：标准 JSON-RPC 2.0 over SSE
+- ⚠️ **旧注册表**：当前可靠运行路径以火山引擎、OpenAI 为主
+- ⚠️ **实验 transport**：JSON-RPC 风格的一次性 SSE 响应，不保证兼容所有标准 MCP 客户端
 - ✅ **跨设备访问**：局域网 HTTP API
 - ✅ **完全解耦**：独立于桌面应用
 - ✅ **单文件部署**：无需安装运行时
@@ -64,7 +68,7 @@ chmod +x start.sh
 dotnet run
 ```
 
-服务器将在 `http://0.0.0.0:5000` 启动。
+服务器将在 `http://0.0.0.0:5000` 启动。该旧服务默认没有桌面 REST API 的 Bearer Token 保护，只应在隔离的开发网络中使用。
 
 ### 3. 配置防火墙
 
