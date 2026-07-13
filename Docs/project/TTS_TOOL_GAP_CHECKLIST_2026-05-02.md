@@ -10,6 +10,13 @@
 
 ## 2026-07-14 迭代记录
 
+- [x] **开放受保护的本地 TTS HTTP 接口与 OpenAPI**
+  - 已完成：`VoiceServiceLocalApi` 新增 Kestrel Host、统一 `application/problem+json`、Bearer Token 中间件、1 MiB 请求体限制、snake_case JSON 和 OpenAPI 3 文档；默认 Host URL 固定使用 `127.0.0.1`，避免不受信任 Host 头污染下载地址。
+  - 已完成：实现 `GET /health`、厂商列表、音色列表、`POST /api/v1/tts` JSON URL、`POST /api/v1/tts/audio` 二进制、受 Token 保护的音频下载及 `/openapi/v1.json`；生成并发按配置限流，二进制读取完成后才释放槽位。
+  - 已完成：新增进程内生成文件注册表，下载端点只允许访问本次 API 生成并登记的文件，同时执行输出目录边界检查；路径穿越和已存在但未登记的输出文件都会被拒绝。
+  - 已验证：按 TDD 先写真实 TestServer 集成测试，初次编译因缺少 `LocalApiApplication` 报 `CS0103`；后续又通过失败测试修正 `refresh` 默认值和未登记文件下载。当前 Local API 共 33 项测试通过，覆盖健康检查、鉴权、OpenAPI、厂商/音色、JSON/二进制、下载、Host 防护、路径安全、请求大小、错误映射和并发上限。
+  - 关联缺口：推进 P0-01、P0-02、P1-17、P2-10、P2-21、P2-22 和 P3-06；桌面进程生命周期、设置界面和 Dify 操作文档继续在后续同日迭代完成。
+
 - [x] **建立本地 TTS API 安全契约与标准测试项目**
   - 已完成：新增跨平台 `VoiceServiceLocalApi` 模块和标准 xUnit 项目，定义外部 TTS 请求、厂商/模型/音色能力、网关结果与 `ILocalTtsGateway`，API 层不依赖 WPF 或具体 Provider。
   - 已完成：新增 256 位 Base64URL Token 生成与固定时间校验、端口/并发/文本上限配置验证、厂商能力驱动的参数默认值与拒绝规则，以及音频 MIME 映射和输出目录边界检查。

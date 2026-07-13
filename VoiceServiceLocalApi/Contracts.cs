@@ -27,6 +27,17 @@ public sealed record LocalTtsGatewayResult(
     string? ErrorCode = null,
     string? ErrorMessage = null);
 
+public sealed record LocalTtsResponse(
+    string RequestId,
+    string Vendor,
+    string ModelId,
+    string VoiceId,
+    string Format,
+    string ContentType,
+    long SizeBytes,
+    DateTimeOffset GeneratedAt,
+    string AudioUrl);
+
 public sealed record LocalModelInfo(string Id, string Name);
 
 public sealed record LocalVoiceInfo(
