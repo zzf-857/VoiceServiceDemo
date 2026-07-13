@@ -17,12 +17,12 @@
   - 已验证：按 TDD 先仅加入测试，初次运行因缺少 `AwsPollyCredentials`、`AwsSignatureV4`、`AmazonPollyTtsProvider` 得到 `CS0103/CS0246`；实现后固定 SigV4 向量、fake HTTP 精确音频落盘、安全错误、SSML/格式和两页分页逐页签名均通过。Local API 35/35、桌面自检全部通过，解决方案构建 0 警告、0 错误；未使用真实 AWS 凭证或执行计费生成。
   - 本轮范围：不包含 lexicon、speech marks、异步长文本任务 API 和区域自动发现，这些能力继续作为后续缺口跟踪。
 
-- [x] **接入 PlayHT HTTP stream TTS 与预置音色库**
-  - 已完成：新增 `PlayHtTtsProvider` 与不回显 API Key 的双凭证解析，按官方 `POST https://api.play.ht/api/v2/tts/stream` 生成音频，使用 `Authorization: Bearer <api-key>` 和 `X-USER-ID`；支持 `Play3.0-mini`、`PlayDialog`、`PlayDialog-turbo`、`PlayHT2.0`。
-  - 已完成：映射 `mp3`、`wav`、`ogg`、`flac`、`mulaw` 五种输出和 `0.1..5.0` 语速；响应必须成功且非空才保留文件，写入失败会清理原子预留文件。
-  - 已完成：接入 `GET https://api.play.ht/api/v2/voices`，音色 ID 优先读取 `voiceId` 并兼容旧 `value`，同时解析名称、试听、性别、年龄、语言和风格；设置页增加 `PLAYHT_USER_ID|PLAYHT_API_KEY` 帮助，首页增加本地 PlayHT SVG。
-  - 已验证：按 TDD 先因缺少 `PlayHtCredentials`/`PlayHtTtsProvider` 得到 `CS0103/CS0246`；实现后 fake HTTP 覆盖 stream URI、双鉴权头、engine/voice/format/speed 请求、Ogg 精确落盘、格式回落、音色 schema 兼容与在线刷新，桌面全部自检通过，Local API 35/35，解决方案构建 0 警告、0 错误。未提供真实 PlayHT 凭证，因此未执行计费生成。
-  - 关联缺口：继续推进“接入更多厂商 API TTS 生成能力”、P0-01、P1-07、P2-10 和 P2-11；多角色对话、克隆管理、sample rate、seed、temperature、时间戳和异步批量任务暂未接入。
+- [x] **接入并校准 PlayHT HTTP stream TTS 与预置音色库**
+  - 已完成：新增 `PlayHtTtsProvider` 与不回显 API Key 的双凭证解析，按官方 `POST https://api.play.ht/api/v2/tts/stream` 生成音频，使用 `Authorization: Bearer <api-key>` 和 `X-USER-ID`；当前可靠暴露 `Play3.0-mini`、`PlayDialog`、`PlayHT2.0`。
+  - 已完成：映射 `mp3`、`wav`、`ogg`、`flac`、`mulaw` 五种输出和 `0.1..5.0` 语速；响应必须成功且非空才保留文件，写入失败会清理原子预留文件，上游错误正文不会返回到桌面或本地 API。
+  - 已完成：接入 `GET https://api.play.ht/api/v2/voices`，按当前官方 schema 优先读取 `id`，兼容旧 `voiceId`/`voice_id`/`value`，同时解析名称、试听、性别、年龄、语言和风格；内置默认音色使用官方 S3 Voice ID，而不是展示名 `larry`。
+  - 已验证：初次接入按 TDD 先因缺少 `PlayHtCredentials`/`PlayHtTtsProvider` 得到 `CS0103/CS0246`；2026-07-14 契约复核又先用官方 `id` fixture、有效默认 Voice ID、凭证回显错误和 Turbo 能力断言得到预期 RED，再实现 GREEN。fake HTTP 覆盖 stream URI、双鉴权头、engine/voice/format/speed、Ogg 精确落盘、官方/旧音色 schema、在线刷新、非成功/空响应、取消传播和凭证不泄漏。
+  - 关联缺口：`PlayDialog-turbo` 需要专用 `*-PlayAI` 音色、`language` 和 WAV 约束，当前从桌面及 `/api/v1/vendors` 能力列表移除，待统一模型能表达跨字段约束后再接入；多角色、克隆管理、sample rate、seed、temperature、时间戳和异步批量任务也暂未接入。
 
 - [x] **接入 Cartesia Sonic TTS bytes 生成与在线音色库**
   - 已完成：新增 `CartesiaTtsProvider`，按官方 `POST https://api.cartesia.ai/tts/bytes` 生成音频，使用 Bearer 鉴权并固定 `Cartesia-Version: 2026-03-01`；支持 `sonic-3.5`、`sonic-3`、`sonic-latest`。

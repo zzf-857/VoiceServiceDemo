@@ -35,7 +35,7 @@ public sealed class PlayHtTtsProvider : ITtsProvider, IVoiceCatalogProvider
     private const string TtsEndpoint = "https://api.play.ht/api/v2/tts/stream";
     private const string VoicesEndpoint = "https://api.play.ht/api/v2/voices";
     private const string DefaultEngine = "Play3.0-mini";
-    private const string DefaultVoice = "larry";
+    private const string DefaultVoice = "s3://voice-cloning-zero-shot/d9ff78ba-d016-47f6-b0ef-dd630f59414e/female-cs/manifest.json";
 
     private readonly HttpClient _httpClient;
     private readonly SettingsService _settingsService;
@@ -98,7 +98,7 @@ public sealed class PlayHtTtsProvider : ITtsProvider, IVoiceCatalogProvider
             return new TtsResult
             {
                 Success = false,
-                ErrorMessage = $"PlayHT API 错误 ({response.StatusCode}): {DecodeSafeText(audioBytes)}"
+                ErrorMessage = $"PlayHT API 请求失败 ({response.StatusCode})。"
             };
         }
 
@@ -175,7 +175,7 @@ public sealed class PlayHtTtsProvider : ITtsProvider, IVoiceCatalogProvider
 
             foreach (var item in items.EnumerateArray())
             {
-                var id = GetString(item, "voiceId") ?? GetString(item, "voice_id") ?? GetString(item, "value");
+                var id = GetString(item, "id") ?? GetString(item, "voiceId") ?? GetString(item, "voice_id") ?? GetString(item, "value");
                 if (string.IsNullOrWhiteSpace(id))
                     continue;
 
@@ -184,6 +184,7 @@ public sealed class PlayHtTtsProvider : ITtsProvider, IVoiceCatalogProvider
                 AddCategory(categories, GetString(item, "age"));
                 AddCategory(categories, GetString(item, "accent"));
                 AddCategory(categories, GetString(item, "voiceType") ?? GetString(item, "voice_type"));
+                AddCategory(categories, GetString(item, "style"));
                 foreach (var style in ReadStrings(item, "styles"))
                     AddCategory(categories, style);
 
@@ -287,14 +288,6 @@ public sealed class PlayHtTtsProvider : ITtsProvider, IVoiceCatalogProvider
         var normalized = value.Trim();
         if (!categories.Contains(normalized, StringComparer.OrdinalIgnoreCase))
             categories.Add(normalized);
-    }
-
-    private static string DecodeSafeText(byte[] bytes)
-    {
-        if (bytes.Length == 0)
-            return "空响应";
-        var text = Encoding.UTF8.GetString(bytes).Replace("\r", " ").Replace("\n", " ").Trim();
-        return text.Length <= 512 ? text : text[..512];
     }
 
     private static void TryDelete(string filePath)

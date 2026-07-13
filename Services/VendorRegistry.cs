@@ -605,14 +605,13 @@ public static class VendorRegistry
             {
                 new VoiceModel { Id = "Play3.0-mini", Name = "Play 3.0 Mini" },
                 new VoiceModel { Id = "PlayDialog", Name = "PlayDialog" },
-                new VoiceModel { Id = "PlayDialog-turbo", Name = "PlayDialog Turbo" },
                 new VoiceModel { Id = "PlayHT2.0", Name = "PlayHT 2.0" }
             },
             DefaultVoices = new()
             {
                 new VoiceOption
                 {
-                    Id = "larry",
+                    Id = "s3://voice-cloning-zero-shot/d9ff78ba-d016-47f6-b0ef-dd630f59414e/female-cs/manifest.json",
                     Name = "Larry",
                     Gender = "男",
                     Language = "英文",

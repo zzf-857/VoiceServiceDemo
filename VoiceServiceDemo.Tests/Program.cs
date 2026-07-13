@@ -1733,6 +1733,7 @@ AssertEqual("user-123", playHtCredentials.UserId, "PlayHT credential parser read
 AssertEqual("key-456", playHtCredentials.ApiKey, "PlayHT credential parser reads API key");
 AssertThrows<ArgumentException>(() => PlayHtCredentials.Parse("only-one-part"), "PlayHT credential parser rejects incomplete credentials");
 AssertThrows<ArgumentException>(() => PlayHtCredentials.Parse("user|key|extra"), "PlayHT credential parser rejects extra credential parts");
+const string playHtOfficialVoiceId = "s3://voice-cloning-zero-shot/d9ff78ba-d016-47f6-b0ef-dd630f59414e/female-cs/manifest.json";
 
 var playHtAudioBytes = new byte[] { 0x4F, 0x67, 0x67, 0x53, 0x00, 0x02 };
 var playHtSettings = new SettingsService();
@@ -1747,7 +1748,7 @@ var playHtResult = await new PlayHtTtsProvider(new HttpClient(playHtHandler), pl
     {
         VendorId = "playht",
         ModelId = "Play3.0-mini",
-        VoiceId = "larry",
+        VoiceId = playHtOfficialVoiceId,
         Text = "Hello from PlayHT.",
         Speed = 1.1,
         OutputFormat = "ogg"
@@ -1761,7 +1762,7 @@ AssertEqual("user-123", playHtHandler.RequestHeaderValues.Single()["X-USER-ID"],
 using (var playHtRequest = JsonDocument.Parse(playHtHandler.RequestBodies.Single()))
 {
     AssertEqual("Hello from PlayHT.", playHtRequest.RootElement.GetProperty("text").GetString(), "PlayHT request sends text");
-    AssertEqual("larry", playHtRequest.RootElement.GetProperty("voice").GetString(), "PlayHT request sends voice id");
+    AssertEqual(playHtOfficialVoiceId, playHtRequest.RootElement.GetProperty("voice").GetString(), "PlayHT request sends the official S3 voice id");
     AssertEqual("Play3.0-mini", playHtRequest.RootElement.GetProperty("voice_engine").GetString(), "PlayHT request sends voice engine");
     AssertEqual("ogg", playHtRequest.RootElement.GetProperty("output_format").GetString(), "PlayHT request sends output format");
     AssertEqual(1.1, playHtRequest.RootElement.GetProperty("speed").GetDouble(), "PlayHT request sends speed");
@@ -1778,7 +1779,7 @@ var playHtFallbackJson = PlayHtTtsProvider.BuildRequestJson(new TtsRequest
 using (var playHtFallback = JsonDocument.Parse(playHtFallbackJson))
 {
     AssertEqual("Play3.0-mini", playHtFallback.RootElement.GetProperty("voice_engine").GetString(), "PlayHT request falls back to default engine");
-    AssertEqual("larry", playHtFallback.RootElement.GetProperty("voice").GetString(), "PlayHT request falls back to default voice");
+    AssertEqual(playHtOfficialVoiceId, playHtFallback.RootElement.GetProperty("voice").GetString(), "PlayHT request falls back to a valid official voice id");
     AssertEqual("mp3", playHtFallback.RootElement.GetProperty("output_format").GetString(), "PlayHT request falls back to MP3");
     AssertEqual(5.0, playHtFallback.RootElement.GetProperty("speed").GetDouble(), "PlayHT request clamps high speed");
 }
@@ -1792,14 +1793,15 @@ AssertEqual(".ulaw", PlayHtTtsProvider.GetOutputExtension("mulaw"), "PlayHT mu-l
 var playHtVoicesJson = """
 [
   {
-    "voiceId": "larry",
-    "value": "legacy-larry",
+    "id": "s3://voice-cloning-zero-shot/d9ff78ba-d016-47f6-b0ef-dd630f59414e/female-cs/manifest.json",
     "name": "Larry",
     "sample": "https://example.com/larry.wav",
     "gender": "male",
     "age": "adult",
+    "accent": "american",
+    "style": "narrative",
     "language": "English (US)",
-    "languageCode": "en-US"
+    "language_code": "en-US"
   },
   {
     "value": "legacy-jane",
@@ -1813,13 +1815,14 @@ var playHtVoicesJson = """
 """;
 var playHtVoices = PlayHtTtsProvider.ParseVoicesJson(playHtVoicesJson);
 AssertEqual(2, playHtVoices.Count, "PlayHT voice parser returns all voices");
-AssertEqual("larry", playHtVoices[0].Id, "PlayHT voice parser prefers voiceId");
+AssertEqual(playHtOfficialVoiceId, playHtVoices[0].Id, "PlayHT voice parser reads the official id field");
 AssertEqual("legacy-jane", playHtVoices[1].Id, "PlayHT voice parser falls back to value");
 AssertEqual("男", playHtVoices[0].Gender, "PlayHT voice parser localizes male gender");
 AssertEqual("女", playHtVoices[1].Gender, "PlayHT voice parser localizes female gender");
 AssertEqual("en-US", playHtVoices[0].Language, "PlayHT voice parser maps languageCode");
 AssertEqual("https://example.com/larry.wav", playHtVoices[0].SampleUrl, "PlayHT voice parser maps sample URL");
 AssertTrue(playHtVoices[0].Categories.Contains("adult"), "PlayHT voice parser keeps age category");
+AssertTrue(playHtVoices[0].Categories.Contains("narrative"), "PlayHT voice parser keeps the official singular style field");
 
 var playHtVoiceHandler = new RecordingQueueHandler(
     new HttpResponseMessage(System.Net.HttpStatusCode.OK)
@@ -1832,6 +1835,44 @@ AssertEqual(2, playHtFetchedVoices.Count, "PlayHT fake voice fetch returns parse
 AssertEqual("https://api.play.ht/api/v2/voices", playHtVoiceHandler.RequestUris.Single()?.AbsoluteUri, "PlayHT voice fetch uses official voices endpoint");
 AssertEqual("Bearer key-456", playHtVoiceHandler.RequestAuthorizationHeaders.Single(), "PlayHT voice fetch sends Bearer API key");
 AssertEqual("user-123", playHtVoiceHandler.RequestHeaderValues.Single()["X-USER-ID"], "PlayHT voice fetch sends user id");
+
+var playHtFailureDirectory = Path.Combine(Path.GetTempPath(), "VoiceServiceDemoTests", Guid.NewGuid().ToString("N"));
+var playHtFailureSettings = new SettingsService();
+playHtFailureSettings.Settings.OutputDirectory = playHtFailureDirectory;
+var playHtFailureHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.Forbidden)
+    {
+        Content = new StringContent("proxy echoed user-123 key-456 Authorization")
+    },
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new ByteArrayContent(Array.Empty<byte>())
+    });
+var playHtFailureProvider = new PlayHtTtsProvider(new HttpClient(playHtFailureHandler), playHtFailureSettings);
+var playHtDeniedResult = await playHtFailureProvider.GenerateAsync(
+    new TtsRequest { VendorId = "playht", VoiceId = playHtOfficialVoiceId, Text = "denied", OutputFormat = "mp3" },
+    "user-123|key-456");
+AssertFalse(playHtDeniedResult.Success, "PlayHT HTTP failure returns an unsuccessful result");
+AssertFalse((playHtDeniedResult.ErrorMessage ?? "").Contains("user-123", StringComparison.Ordinal), "PlayHT HTTP errors do not reveal the user id");
+AssertFalse((playHtDeniedResult.ErrorMessage ?? "").Contains("key-456", StringComparison.Ordinal), "PlayHT HTTP errors do not reveal the API key");
+AssertFalse((playHtDeniedResult.ErrorMessage ?? "").Contains("Authorization", StringComparison.OrdinalIgnoreCase), "PlayHT HTTP errors do not return an echoed authorization body");
+var playHtEmptyResult = await playHtFailureProvider.GenerateAsync(
+    new TtsRequest { VendorId = "playht", VoiceId = playHtOfficialVoiceId, Text = "empty", OutputFormat = "mp3" },
+    "user-123|key-456");
+AssertFalse(playHtEmptyResult.Success, "PlayHT empty response returns an unsuccessful result");
+AssertEqual(0, Directory.Exists(playHtFailureDirectory) ? Directory.GetFiles(playHtFailureDirectory).Length : 0, "PlayHT failures leave no reserved output files");
+
+var playHtCancellationProbe = new CancellationProbeHandler();
+using (var playHtCancellation = new CancellationTokenSource())
+{
+    playHtCancellation.Cancel();
+    await AssertThrowsAsync<OperationCanceledException>(
+        () => new PlayHtTtsProvider(new HttpClient(playHtCancellationProbe), playHtSettings).GenerateAsync(
+            new TtsRequest { VendorId = "playht", VoiceId = playHtOfficialVoiceId, Text = "cancel" },
+            "user-123|key-456",
+            playHtCancellation.Token),
+        "PlayHT generation propagates cancellation");
+}
 
 Console.WriteLine("PlayHT provider request body and voice parser tests passed.");
 
@@ -2258,7 +2299,8 @@ AssertTrue(playHtVendor.SupportsVoiceFetch, "PlayHT vendor enables online voice 
 AssertFalse(playHtVendor.VolumeDef.IsSupported, "PlayHT vendor does not claim unsupported volume control");
 AssertTrue(playHtVendor.Capabilities.SupportedOutputFormats.SequenceEqual(new[] { "mp3", "wav", "ogg", "flac", "mulaw" }), "PlayHT vendor exposes official output formats");
 AssertTrue(playHtVendor.DefaultModels.Any(model => model.Id == "Play3.0-mini"), "PlayHT vendor exposes Play3.0-mini");
-AssertTrue(playHtVendor.DefaultVoices.Any(voice => voice.Id == "larry"), "PlayHT vendor exposes official Larry example voice");
+AssertFalse(playHtVendor.DefaultModels.Any(model => model.Id == "PlayDialog-turbo"), "PlayHT registry does not expose Turbo until language, voice, and WAV constraints are modeled");
+AssertTrue(playHtVendor.DefaultVoices.Any(voice => voice.Id == playHtOfficialVoiceId), "PlayHT vendor exposes an official usable voice id");
 
 var awsPollyVendor = VendorRegistry.GetById("aws-polly") ?? throw new Exception("Amazon Polly vendor config is missing");
 AssertEqual(15, VendorRegistry.All.Count, "desktop registry contains 15 TTS vendors after Amazon Polly registration");
