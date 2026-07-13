@@ -10,6 +10,13 @@
 
 ## 2026-07-14 迭代记录
 
+- [x] **建立本地 TTS API 安全契约与标准测试项目**
+  - 已完成：新增跨平台 `VoiceServiceLocalApi` 模块和标准 xUnit 项目，定义外部 TTS 请求、厂商/模型/音色能力、网关结果与 `ILocalTtsGateway`，API 层不依赖 WPF 或具体 Provider。
+  - 已完成：新增 256 位 Base64URL Token 生成与固定时间校验、端口/并发/文本上限配置验证、厂商能力驱动的参数默认值与拒绝规则，以及音频 MIME 映射和输出目录边界检查。
+  - 已完成：根 WPF 项目排除两个新子项目的源码与构建目录，避免 SDK 默认 glob 重复编译子项目程序集；新项目依赖全部使用固定版本。
+  - 已验证：按 TDD 先创建 Token、参数验证和路径安全测试，修正 xUnit 全局 using 后初次编译因缺少 `LocalVendorInfo` 报 `CS0246`；实现后 `dotnet test VoiceServiceLocalApi.Tests/VoiceServiceLocalApi.Tests.csproj --no-restore` 共 18 项全部通过，旧桌面自检全部通过，解决方案构建 0 警告、0 错误。
+  - 关联缺口：推进 P0-01、P0-02、P2-10、P2-21、P3-03 和 P3-06；HTTP 端点、桌面生命周期与 Dify 文档在后续同日迭代继续完成。
+
 - [x] **统一桌面端 TTS Provider 注册与取消传播**
   - 已完成：新增 `ITtsProvider`、`IVoiceCatalogProvider` 和大小写不敏感的 `TtsProviderRegistry`，12 个桌面厂商全部通过唯一 ID 注册；连通性、音色刷新和生成不再维护三组厂商 switch。
   - 已完成：新增 `VoiceCatalogResult`，明确区分未知厂商、厂商不支持在线刷新、未配置凭证和上游刷新失败；旧的 `FetchVoicesAsync` 保留为兼容包装，不再由核心路由静默吞掉错误。
