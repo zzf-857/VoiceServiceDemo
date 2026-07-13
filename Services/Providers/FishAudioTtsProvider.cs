@@ -171,8 +171,7 @@ public sealed class FishAudioTtsProvider
     private string GetOutputFilePath(string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"fish_audio_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(outputFormat)}");
+        return AudioOutputPath.Reserve(dir, "fish_audio", GetOutputFormatExtension(outputFormat));
     }
 
     private static string InferGender(IReadOnlyList<string> tags)

@@ -8,6 +8,14 @@
 
 当前项目已经具备“选择厂商 -> 配置凭证 -> 选择音色 -> 生成播放”的主流程，但距离成熟的 TTS 生产/测试工具还有明显差距。最大短板不是界面是否能点通，而是厂商能力抽象还不够完整：音色库、模型、语言、情感、SSML、采样率、音频格式、长文本、试听、批量生成、历史管理和错误诊断都还没有形成统一的能力模型。
 
+## 2026-07-14 迭代记录
+
+- [x] **修复桌面端并发生成覆盖音频文件**
+  - 已完成：新增统一的 `AudioOutputPath.Reserve`，文件名使用毫秒时间戳、4 字节密码学随机后缀，并通过 `FileMode.CreateNew` 原子预留；同时规范厂商标识和扩展名。
+  - 已完成：阿里云、Azure、百度、Deepgram、ElevenLabs、Fish Audio、Google、火山、MiniMax、OpenAI、腾讯和小米 MiMo 共 12 个桌面端 TTS Provider 已统一接入，继续复用各 Provider 原有的实际格式到扩展名映射；本次未改动 `VoiceServiceMcp`。
+  - 已验证：按 TDD 先加入固定时间连续预留测试，`dotnet run --project VoiceServiceDemo.Tests/VoiceServiceDemo.Tests.csproj --no-restore` 初次因缺少 `AudioOutputPath` 报 `CS0103`；实现后全部自检通过（仅出现既有 `App.xaml.cs:16 CS8604` 可空警告），`dotnet build VoiceServiceDemo.slnx --no-restore` 通过且 0 警告、0 错误。
+  - 关联缺口：完成 P1-17；输出命名模板、历史记录与 MCP 能力统一仍按各自未完成项继续跟踪。
+
 ## 2026-07-01 迭代记录
 
 - [x] **接入 Deepgram Aura TTS HTTP 生成与模型音色刷新**
@@ -285,11 +293,10 @@
   - 建议：生成后用 NAudio 或媒体探测读取时长、格式、采样率、声道。
   - 验收：结果卡片显示时长、格式、大小、采样率。
 
-- [ ] **P1-17 秒级文件名可能覆盖**
-  - 现状：输出文件名使用 `yyyyMMdd_HHmmss`。
-  - 影响：同秒多次生成会覆盖。
-  - 建议：追加毫秒、短 GUID 或 request id。
-  - 验收：快速连续生成不会覆盖旧音频。
+- [x] **P1-17 毫秒时间戳 + 密码学随机后缀 + 原子预留避免覆盖**
+  - 现状：12 个桌面端 Provider 统一使用 `{vendor}_{yyyyMMdd_HHmmss_fff}_{8位随机后缀}.{ext}` 输出文件名。
+  - 实现：随机后缀来自 4 字节密码学安全随机数，并用 `FileMode.CreateNew` 原子预留；仅在同名文件已存在时重试，防止并发请求互相覆盖。
+  - 验收：固定同一时间连续预留会返回不同路径，两个文件均已落盘，厂商前缀、毫秒时间戳和原格式扩展名保持正确。
 
 - [ ] **P1-18 缺少输出命名模板**
   - 现状：文件名只含厂商和时间。

@@ -302,8 +302,7 @@ public sealed class AliyunTtsProvider
     private string GetOutputFilePath(string modelId, string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"aliyun_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(modelId, outputFormat)}");
+        return AudioOutputPath.Reserve(dir, "aliyun", GetOutputFormatExtension(modelId, outputFormat));
     }
 
     private static string? TryExtractAudioUrl(string jsonStr)

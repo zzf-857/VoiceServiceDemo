@@ -149,8 +149,7 @@ public sealed class AzureTtsProvider
     private string GetOutputFilePath(string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"azure_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(outputFormat)}");
+        return AudioOutputPath.Reserve(dir, "azure", GetOutputFormatExtension(outputFormat));
     }
 
     private static (string SubscriptionKey, string Region)? ParseCredentials(string apiKey)

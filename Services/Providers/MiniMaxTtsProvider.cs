@@ -173,8 +173,7 @@ public sealed class MiniMaxTtsProvider
     private string GetOutputFilePath(string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"minimax_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(outputFormat)}");
+        return AudioOutputPath.Reserve(dir, "minimax", GetOutputFormatExtension(outputFormat));
     }
 
     private static void AddVoiceArray(List<VoiceOption> voices, JsonElement root, string propertyName, string category)

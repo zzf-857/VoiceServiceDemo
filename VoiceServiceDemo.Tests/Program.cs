@@ -22,6 +22,27 @@ static void AssertFalse(bool condition, string message)
         throw new Exception(message);
 }
 
+var audioOutputTempDirectory = Path.Combine(Path.GetTempPath(), $"voice-service-audio-output-{Guid.NewGuid():N}");
+try
+{
+    var fixedTime = new DateTimeOffset(2026, 7, 14, 8, 9, 10, 123, TimeSpan.Zero);
+    var firstAudioPath = AudioOutputPath.Reserve(audioOutputTempDirectory, "fish_audio", ".mp3", fixedTime);
+    var secondAudioPath = AudioOutputPath.Reserve(audioOutputTempDirectory, "fish_audio", ".mp3", fixedTime);
+
+    AssertTrue(firstAudioPath != secondAudioPath, "reserved audio output paths are unique");
+    AssertTrue(File.Exists(firstAudioPath), "first audio output path is atomically reserved");
+    AssertTrue(File.Exists(secondAudioPath), "second audio output path is atomically reserved");
+    AssertTrue(Path.GetFileName(firstAudioPath).StartsWith("fish_audio_20260714_080910_123_"), "audio output filename includes vendor and millisecond timestamp");
+    AssertEqual(".mp3", Path.GetExtension(firstAudioPath), "audio output extension is preserved");
+}
+finally
+{
+    if (Directory.Exists(audioOutputTempDirectory))
+        Directory.Delete(audioOutputTempDirectory, recursive: true);
+}
+
+Console.WriteLine("Audio output path reservation tests passed.");
+
 static bool TryGetNested(JsonElement root, out JsonElement value, params string[] names)
 {
     value = root;

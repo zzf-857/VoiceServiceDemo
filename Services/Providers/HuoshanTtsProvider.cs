@@ -444,7 +444,7 @@ public sealed class HuoshanTtsProvider
 
     private async Task<TtsResult> SaveAudioBytesAsync(byte[] audioBytes, TtsRequest request)
     {
-        var filePath = GetOutputFilePath(request.VendorId, request.OutputFormat);
+        var filePath = GetOutputFilePath(request.OutputFormat);
         await File.WriteAllBytesAsync(filePath, audioBytes);
 
         var vendor = VendorRegistry.GetById(request.VendorId);
@@ -459,11 +459,10 @@ public sealed class HuoshanTtsProvider
         };
     }
 
-    private string GetOutputFilePath(string vendorId, string outputFormat)
+    private string GetOutputFilePath(string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"{vendorId}_{DateTime.Now:yyyyMMdd_HHmmss}{HuoshanTtsProtocol.GetOutputFormatExtension(outputFormat)}");
+        return AudioOutputPath.Reserve(dir, "huoshan", HuoshanTtsProtocol.GetOutputFormatExtension(outputFormat));
     }
 
     private static JsonElement TryGetArray(JsonElement elem, params string[] names)

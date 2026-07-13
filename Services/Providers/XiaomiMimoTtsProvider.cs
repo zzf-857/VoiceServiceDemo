@@ -135,8 +135,7 @@ public sealed class XiaomiMimoTtsProvider
     private string GetOutputFilePath(string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"xiaomi_mimo_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(outputFormat)}");
+        return AudioOutputPath.Reserve(dir, "xiaomi_mimo", GetOutputFormatExtension(outputFormat));
     }
 
     private static bool TryGetNested(JsonElement root, out JsonElement value, params string[] names)

@@ -239,8 +239,7 @@ public sealed class TencentTtsProvider
     private string GetOutputFilePath(string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"tencent_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(outputFormat)}");
+        return AudioOutputPath.Reserve(dir, "tencent", GetOutputFormatExtension(outputFormat));
     }
 
     private static string? TryGetStr(JsonElement elem, params string[] names)

@@ -116,8 +116,7 @@ public sealed class BaiduTtsProvider
     private string GetOutputFilePath(string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"baidu_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(outputFormat)}");
+        return AudioOutputPath.Reserve(dir, "baidu", GetOutputFormatExtension(outputFormat));
     }
 
     private static (string ApiKey, string SecretKey)? ParseCredentials(string apiKey)

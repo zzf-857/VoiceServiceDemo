@@ -156,8 +156,7 @@ public sealed class GoogleTtsProvider
     private string GetOutputFilePath(string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"google_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(outputFormat)}");
+        return AudioOutputPath.Reserve(dir, "google", GetOutputFormatExtension(outputFormat));
     }
 
     private static string InferLanguageCode(string voiceId)

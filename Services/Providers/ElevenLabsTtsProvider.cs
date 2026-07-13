@@ -164,8 +164,7 @@ public sealed class ElevenLabsTtsProvider
     private string GetOutputFilePath(string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"elevenlabs_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(outputFormat)}");
+        return AudioOutputPath.Reserve(dir, "elevenlabs", GetOutputFormatExtension(outputFormat));
     }
 
     private static List<string> BuildCategories(string? category, JsonElement labels)

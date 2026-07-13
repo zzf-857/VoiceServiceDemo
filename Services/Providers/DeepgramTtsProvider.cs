@@ -219,8 +219,7 @@ public sealed class DeepgramTtsProvider
     private string GetOutputFilePath(string outputFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"deepgram_{DateTime.Now:yyyyMMdd_HHmmss}{GetOutputFormatExtension(outputFormat)}");
+        return AudioOutputPath.Reserve(dir, "deepgram", GetOutputFormatExtension(outputFormat));
     }
 
     private static List<string> BuildCategories(JsonElement item, JsonElement metadata)

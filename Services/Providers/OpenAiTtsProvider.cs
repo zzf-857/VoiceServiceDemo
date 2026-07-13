@@ -91,7 +91,6 @@ public sealed class OpenAiTtsProvider
     private string GetOutputFilePath(string responseFormat)
     {
         var dir = _settingsService.Settings.OutputDirectory;
-        Directory.CreateDirectory(dir);
-        return Path.Combine(dir, $"openai_{DateTime.Now:yyyyMMdd_HHmmss}{GetResponseFormatExtension(responseFormat)}");
+        return AudioOutputPath.Reserve(dir, "openai", GetResponseFormatExtension(responseFormat));
     }
 }
