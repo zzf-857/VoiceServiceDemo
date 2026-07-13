@@ -9,6 +9,7 @@ namespace VoiceServiceDemo.Services.Providers;
 
 public sealed class CartesiaTtsProvider : ITtsProvider, IVoiceCatalogProvider
 {
+    private const int MaxVoicePages = 20;
     private const string TtsEndpoint = "https://api.cartesia.ai/tts/bytes";
     private const string VoicesEndpoint = "https://api.cartesia.ai/voices";
     private const string DefaultModel = "sonic-3.5";
@@ -61,7 +62,7 @@ public sealed class CartesiaTtsProvider : ITtsProvider, IVoiceCatalogProvider
             return new TtsResult
             {
                 Success = false,
-                ErrorMessage = $"Cartesia API 错误 ({response.StatusCode}): {DecodeSafeText(audioBytes)}"
+                ErrorMessage = $"Cartesia API 请求失败 ({response.StatusCode})。"
             };
         }
 
@@ -103,11 +104,23 @@ public sealed class CartesiaTtsProvider : ITtsProvider, IVoiceCatalogProvider
         if (string.IsNullOrWhiteSpace(apiKey))
             throw new ArgumentException("Cartesia API Key 为空。", nameof(apiKey));
 
-        using var request = CreateRequest(HttpMethod.Get, VoicesEndpoint, apiKey);
-        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        var json = await response.Content.ReadAsStringAsync(cancellationToken);
-        return ParseVoicesJson(json);
+        var voices = new List<VoiceOption>();
+        string? cursor = null;
+        for (var page = 0; page < MaxVoicePages; page++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using var request = CreateRequest(HttpMethod.Get, BuildVoicesEndpoint(cursor), apiKey);
+            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            var parsedPage = ParseVoicesPage(json);
+            voices.AddRange(parsedPage.Voices);
+            if (!parsedPage.HasMore || string.IsNullOrWhiteSpace(parsedPage.NextPage))
+                break;
+            cursor = parsedPage.NextPage;
+        }
+
+        return voices;
     }
 
     public static string BuildRequestJson(TtsRequest request)
@@ -157,21 +170,49 @@ public sealed class CartesiaTtsProvider : ITtsProvider, IVoiceCatalogProvider
 
     public static List<VoiceOption> ParseVoicesJson(string json)
     {
-        var voices = new List<VoiceOption>();
         try
         {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-            var items = root.ValueKind == JsonValueKind.Array
-                ? root
-                : root.ValueKind == JsonValueKind.Object &&
-                  root.TryGetProperty("data", out var data) &&
-                  data.ValueKind == JsonValueKind.Array
-                    ? data
-                    : default;
-            if (items.ValueKind != JsonValueKind.Array)
-                return voices;
+            return ParseVoicesPage(json).Voices;
+        }
+        catch (JsonException)
+        {
+            return new List<VoiceOption>();
+        }
+    }
 
+    public static string NormalizeOutputFormat(string? outputFormat) =>
+        string.Equals(outputFormat?.Trim(), "wav", StringComparison.OrdinalIgnoreCase) ? "wav" : "mp3";
+
+    private static HttpRequestMessage CreateRequest(HttpMethod method, string endpoint, string apiKey)
+    {
+        var request = new HttpRequestMessage(method, endpoint);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
+        request.Headers.Add("Cartesia-Version", ApiVersion);
+        return request;
+    }
+
+    private static string BuildVoicesEndpoint(string? cursor)
+    {
+        var endpoint = $"{VoicesEndpoint}?limit=100&expand%5B%5D=preview_file_url";
+        return string.IsNullOrWhiteSpace(cursor)
+            ? endpoint
+            : $"{endpoint}&starting_after={Uri.EscapeDataString(cursor)}";
+    }
+
+    private static (List<VoiceOption> Voices, bool HasMore, string? NextPage) ParseVoicesPage(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        var items = root.ValueKind == JsonValueKind.Array
+            ? root
+            : root.ValueKind == JsonValueKind.Object &&
+              root.TryGetProperty("data", out var data) &&
+              data.ValueKind == JsonValueKind.Array
+                ? data
+                : default;
+        var voices = new List<VoiceOption>();
+        if (items.ValueKind == JsonValueKind.Array)
+        {
             foreach (var item in items.EnumerateArray())
             {
                 var id = GetString(item, "id");
@@ -196,28 +237,17 @@ public sealed class CartesiaTtsProvider : ITtsProvider, IVoiceCatalogProvider
                     Name = GetString(item, "name") ?? id,
                     Gender = NormalizeGender(GetString(item, "gender") ?? GetString(metadata, "gender")),
                     Language = language,
-                    SampleUrl = GetString(item, "preview_url") ?? "",
+                    SampleUrl = GetString(item, "preview_file_url") ?? GetString(item, "preview_url") ?? "",
                     Categories = categories
                 });
             }
         }
-        catch (JsonException)
-        {
-            return new List<VoiceOption>();
-        }
 
-        return voices;
-    }
-
-    public static string NormalizeOutputFormat(string? outputFormat) =>
-        string.Equals(outputFormat?.Trim(), "wav", StringComparison.OrdinalIgnoreCase) ? "wav" : "mp3";
-
-    private static HttpRequestMessage CreateRequest(HttpMethod method, string endpoint, string apiKey)
-    {
-        var request = new HttpRequestMessage(method, endpoint);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
-        request.Headers.Add("Cartesia-Version", ApiVersion);
-        return request;
+        var hasMore = root.ValueKind == JsonValueKind.Object &&
+            root.TryGetProperty("has_more", out var hasMoreElement) &&
+            hasMoreElement.ValueKind is JsonValueKind.True or JsonValueKind.False &&
+            hasMoreElement.GetBoolean();
+        return (voices, hasMore, GetString(root, "next_page"));
     }
 
     private static string ResolveModel(string? modelId) =>
@@ -235,8 +265,9 @@ public sealed class CartesiaTtsProvider : ITtsProvider, IVoiceCatalogProvider
 
     private static string NormalizeGender(string? value) => (value ?? "").Trim().ToLowerInvariant() switch
     {
-        "female" or "woman" => "女",
-        "male" or "man" => "男",
+        "female" or "woman" or "feminine" => "女",
+        "male" or "man" or "masculine" => "男",
+        "gender_neutral" => "中性",
         _ => "中性"
     };
 
@@ -272,14 +303,6 @@ public sealed class CartesiaTtsProvider : ITtsProvider, IVoiceCatalogProvider
         var normalized = value.Trim();
         if (!categories.Contains(normalized, StringComparer.OrdinalIgnoreCase))
             categories.Add(normalized);
-    }
-
-    private static string DecodeSafeText(byte[] bytes)
-    {
-        if (bytes.Length == 0)
-            return "空响应";
-        var text = Encoding.UTF8.GetString(bytes).Replace("\r", " ").Replace("\n", " ").Trim();
-        return text.Length <= 512 ? text : text[..512];
     }
 
     private static void TryDelete(string filePath)

@@ -24,12 +24,12 @@
   - 已验证：初次接入按 TDD 先因缺少 `PlayHtCredentials`/`PlayHtTtsProvider` 得到 `CS0103/CS0246`；2026-07-14 契约复核又先用官方 `id` fixture、有效默认 Voice ID、凭证回显错误和 Turbo 能力断言得到预期 RED，再实现 GREEN。fake HTTP 覆盖 stream URI、双鉴权头、engine/voice/format/speed、Ogg 精确落盘、官方/旧音色 schema、在线刷新、非成功/空响应、取消传播和凭证不泄漏。
   - 关联缺口：`PlayDialog-turbo` 需要专用 `*-PlayAI` 音色、`language` 和 WAV 约束，当前从桌面及 `/api/v1/vendors` 能力列表移除，待统一模型能表达跨字段约束后再接入；多角色、克隆管理、sample rate、seed、temperature、时间戳和异步批量任务也暂未接入。
 
-- [x] **接入 Cartesia Sonic TTS bytes 生成与在线音色库**
+- [x] **接入并校准 Cartesia Sonic TTS bytes 生成与在线音色库**
   - 已完成：新增 `CartesiaTtsProvider`，按官方 `POST https://api.cartesia.ai/tts/bytes` 生成音频，使用 Bearer 鉴权并固定 `Cartesia-Version: 2026-03-01`；支持 `sonic-3.5`、`sonic-3`、`sonic-latest`。
-  - 已完成：映射 MP3（44.1 kHz / 128 kbps）与 WAV（PCM S16LE / 44.1 kHz），支持速度 `0.6..1.5`、音量 `0.5..2.0`、SSML transcript 和 `generation_config.emotion`；输出继续使用原子唯一文件预留，失败写入会清理空文件。
-  - 已完成：接入 `GET https://api.cartesia.ai/voices`，解析 `data[]` 的音色 ID、名称、语言、性别、描述和标签；设置页增加 `CARTESIA_API_KEY` 文案，首页增加本地 Cartesia SVG，工作区增加常用 Cartesia 情感选择。
-  - 已验证：按 TDD 先因缺少 `CartesiaTtsProvider` 得到 `CS0246/CS0103`；实现后 fake HTTP 覆盖官方 URI、Bearer、版本头、模型/音色、格式、速度/音量/情感、SSML、精确音频落盘与音色刷新，桌面全部自检通过，Local API 35/35，解决方案构建 0 警告、0 错误。未提供真实 Cartesia Key，因此未执行计费生成。
-  - 关联缺口：继续推进“接入更多厂商 API TTS 生成能力”、P0-01、P1-07、P2-10 和 P2-11；WebSocket/SSE、时间戳、克隆、词典和更细采样率/码率暂未接入。
+  - 已完成：映射 MP3（44.1 kHz / 128 kbps）与 WAV（PCM S16LE / 44.1 kHz），支持速度 `0.6..1.5`、音量 `0.5..2.0`、普通 transcript 中的官方内联控制标签和 `generation_config.emotion`；不再把标签子集对外声明成完整 SSML。
+  - 已完成：`GET https://api.cartesia.ai/voices` 使用 `limit=100`、`expand[]=preview_file_url` 和 `starting_after` 最多读取 20 页；按当前官方 schema 解析 `feminine`、`masculine`、`gender_neutral` 与 `preview_file_url`，同时保留旧字段兼容。上游错误正文不会返回桌面或本地 API。
+  - 已验证：初次接入按 TDD 先因缺少 `CartesiaTtsProvider` 得到 `CS0246/CS0103`；2026-07-14 契约复核又先用官方分页、性别、试听字段、错误回显和能力声明 fixture 得到预期 RED，再实现 GREEN。fake HTTP 覆盖逐页 Bearer/版本头、游标编码、两页合并、模型/音色、格式、速度/音量/情感、内联标签、精确落盘、非成功/空响应、取消传播和凭证不泄漏。
+  - 关联缺口：继续推进“接入更多厂商 API TTS 生成能力”、P0-01、P1-07、P2-10 和 P2-11；完整 SSML、WebSocket/SSE、时间戳、克隆、词典和更细采样率/码率暂未接入。
 
 - [x] **完成本地 API 设置界面、Dify 指南与运行时烟测**
   - 已完成：设置页新增本地 TTS API 卡片，可控制启停、端口和 Docker/局域网访问，实时显示运行/故障状态与实际监听地址；支持 Token 显示、复制、重新生成，以及显式“保存并重启 API”。

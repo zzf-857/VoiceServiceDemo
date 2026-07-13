@@ -1665,66 +1665,117 @@ using (var cartesiaRequest = JsonDocument.Parse(cartesiaHandler.RequestBodies.Si
     AssertEqual("happy", generationConfig.GetProperty("emotion").GetString(), "Cartesia request sends emotion");
 }
 
-var cartesiaSsmlJson = CartesiaTtsProvider.BuildRequestJson(new TtsRequest
+var cartesiaInlineTagsJson = CartesiaTtsProvider.BuildRequestJson(new TtsRequest
 {
     VendorId = "cartesia",
     ModelId = "sonic-3",
-    VoiceId = "voice-ssml",
-    Text = "ignored",
-    InputFormat = TtsInputFormat.Ssml,
-    SsmlText = "<speak>Hello <break time=\"200ms\"/></speak>",
+    VoiceId = "voice-inline-tags",
+    Text = "Hello <break time=\"200ms\"/>",
+    InputFormat = TtsInputFormat.PlainText,
     Speed = 4,
     Volume = 0.1,
     OutputFormat = "wav"
 });
-using (var cartesiaSsmlRequest = JsonDocument.Parse(cartesiaSsmlJson))
+using (var cartesiaInlineTagsRequest = JsonDocument.Parse(cartesiaInlineTagsJson))
 {
-    AssertEqual("<speak>Hello <break time=\"200ms\"/></speak>", cartesiaSsmlRequest.RootElement.GetProperty("transcript").GetString(), "Cartesia SSML request uses ssml text");
-    AssertEqual("wav", cartesiaSsmlRequest.RootElement.GetProperty("output_format").GetProperty("container").GetString(), "Cartesia request maps WAV container");
-    AssertEqual("pcm_s16le", cartesiaSsmlRequest.RootElement.GetProperty("output_format").GetProperty("encoding").GetString(), "Cartesia WAV request sends PCM encoding");
-    AssertEqual(1.5, cartesiaSsmlRequest.RootElement.GetProperty("generation_config").GetProperty("speed").GetDouble(), "Cartesia request clamps speed");
-    AssertEqual(0.5, cartesiaSsmlRequest.RootElement.GetProperty("generation_config").GetProperty("volume").GetDouble(), "Cartesia request clamps volume");
+    AssertEqual("Hello <break time=\"200ms\"/>", cartesiaInlineTagsRequest.RootElement.GetProperty("transcript").GetString(), "Cartesia request preserves supported inline control tags");
+    AssertEqual("wav", cartesiaInlineTagsRequest.RootElement.GetProperty("output_format").GetProperty("container").GetString(), "Cartesia request maps WAV container");
+    AssertEqual("pcm_s16le", cartesiaInlineTagsRequest.RootElement.GetProperty("output_format").GetProperty("encoding").GetString(), "Cartesia WAV request sends PCM encoding");
+    AssertEqual(1.5, cartesiaInlineTagsRequest.RootElement.GetProperty("generation_config").GetProperty("speed").GetDouble(), "Cartesia request clamps speed");
+    AssertEqual(0.5, cartesiaInlineTagsRequest.RootElement.GetProperty("generation_config").GetProperty("volume").GetDouble(), "Cartesia request clamps volume");
 }
 
-var cartesiaVoicesJson = """
+var cartesiaVoicesPageOne = """
 {
   "data": [
     {
       "id": "voice-1",
       "name": "Skylar",
       "language": "en",
-      "gender": "female",
-      "description": "Friendly guide"
-    },
+      "gender": "feminine",
+      "description": "Friendly guide",
+      "preview_file_url": "https://api.cartesia.ai/voices/voice-1/preview"
+    }
+  ],
+  "has_more": true,
+  "next_page": "voice+cursor"
+}
+""";
+var cartesiaVoicesPageTwo = """
+{
+  "data": [
     {
       "id": "voice-2",
       "name": "Mateo",
       "language": "es",
-      "gender": "male"
+      "gender": "masculine"
     }
-  ]
+  ],
+  "has_more": false
 }
 """;
-var cartesiaVoices = CartesiaTtsProvider.ParseVoicesJson(cartesiaVoicesJson);
-AssertEqual(2, cartesiaVoices.Count, "Cartesia voice parser returns all voices");
+var cartesiaVoices = CartesiaTtsProvider.ParseVoicesJson(cartesiaVoicesPageOne);
+AssertEqual(1, cartesiaVoices.Count, "Cartesia voice parser returns the current page");
 AssertEqual("voice-1", cartesiaVoices[0].Id, "Cartesia voice parser maps id");
 AssertEqual("Skylar", cartesiaVoices[0].Name, "Cartesia voice parser maps name");
-AssertEqual("女", cartesiaVoices[0].Gender, "Cartesia voice parser localizes female gender");
+AssertEqual("女", cartesiaVoices[0].Gender, "Cartesia voice parser localizes official feminine gender");
 AssertEqual("en", cartesiaVoices[0].Language, "Cartesia voice parser maps language");
+AssertEqual("https://api.cartesia.ai/voices/voice-1/preview", cartesiaVoices[0].SampleUrl, "Cartesia voice parser maps expanded preview_file_url");
 AssertTrue(cartesiaVoices[0].Categories.Contains("Friendly guide"), "Cartesia voice parser keeps description metadata");
-AssertEqual("男", cartesiaVoices[1].Gender, "Cartesia voice parser localizes male gender");
 
 var cartesiaVoiceHandler = new RecordingQueueHandler(
     new HttpResponseMessage(System.Net.HttpStatusCode.OK)
     {
-        Content = new StringContent(cartesiaVoicesJson, System.Text.Encoding.UTF8, "application/json")
+        Content = new StringContent(cartesiaVoicesPageOne, System.Text.Encoding.UTF8, "application/json")
+    },
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new StringContent(cartesiaVoicesPageTwo, System.Text.Encoding.UTF8, "application/json")
     });
 var cartesiaFetchedVoices = await new CartesiaTtsProvider(new HttpClient(cartesiaVoiceHandler), cartesiaSettings)
     .FetchVoicesAsync("cartesia-key");
-AssertEqual(2, cartesiaFetchedVoices.Count, "Cartesia fake voice fetch returns parsed voices");
-AssertEqual("https://api.cartesia.ai/voices", cartesiaVoiceHandler.RequestUris.Single()?.AbsoluteUri, "Cartesia voice fetch uses official voices endpoint");
-AssertEqual("Bearer cartesia-key", cartesiaVoiceHandler.RequestAuthorizationHeaders.Single(), "Cartesia voice fetch sends Bearer authorization");
-AssertEqual("2026-03-01", cartesiaVoiceHandler.RequestHeaderValues.Single()["Cartesia-Version"], "Cartesia voice fetch pins API version");
+AssertEqual(2, cartesiaFetchedVoices.Count, "Cartesia fake voice fetch merges paginated voices");
+AssertEqual("男", cartesiaFetchedVoices[1].Gender, "Cartesia voice fetch localizes official masculine gender");
+AssertEqual("https://api.cartesia.ai/voices?limit=100&expand%5B%5D=preview_file_url", cartesiaVoiceHandler.RequestUris[0]?.AbsoluteUri, "Cartesia voice fetch requests the first expanded page");
+AssertEqual("https://api.cartesia.ai/voices?limit=100&expand%5B%5D=preview_file_url&starting_after=voice%2Bcursor", cartesiaVoiceHandler.RequestUris[1]?.AbsoluteUri, "Cartesia voice fetch encodes the next-page cursor");
+AssertTrue(cartesiaVoiceHandler.RequestAuthorizationHeaders.All(value => value == "Bearer cartesia-key"), "Cartesia voice fetch sends Bearer authorization on every page");
+AssertTrue(cartesiaVoiceHandler.RequestHeaderValues.All(headers => headers["Cartesia-Version"] == "2026-03-01"), "Cartesia voice fetch pins the API version on every page");
+
+var cartesiaFailureDirectory = Path.Combine(Path.GetTempPath(), "VoiceServiceDemoTests", Guid.NewGuid().ToString("N"));
+var cartesiaFailureSettings = new SettingsService();
+cartesiaFailureSettings.Settings.OutputDirectory = cartesiaFailureDirectory;
+var cartesiaFailureHandler = new RecordingQueueHandler(
+    new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized)
+    {
+        Content = new StringContent("proxy echoed cartesia-key Authorization")
+    },
+    new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+        Content = new ByteArrayContent(Array.Empty<byte>())
+    });
+var cartesiaFailureProvider = new CartesiaTtsProvider(new HttpClient(cartesiaFailureHandler), cartesiaFailureSettings);
+var cartesiaDeniedResult = await cartesiaFailureProvider.GenerateAsync(
+    new TtsRequest { VendorId = "cartesia", VoiceId = "voice-1", Text = "denied", OutputFormat = "mp3" },
+    "cartesia-key");
+AssertFalse(cartesiaDeniedResult.Success, "Cartesia HTTP failure returns an unsuccessful result");
+AssertFalse((cartesiaDeniedResult.ErrorMessage ?? "").Contains("cartesia-key", StringComparison.Ordinal), "Cartesia HTTP errors do not reveal the API key");
+AssertFalse((cartesiaDeniedResult.ErrorMessage ?? "").Contains("Authorization", StringComparison.OrdinalIgnoreCase), "Cartesia HTTP errors do not return an echoed authorization body");
+var cartesiaEmptyResult = await cartesiaFailureProvider.GenerateAsync(
+    new TtsRequest { VendorId = "cartesia", VoiceId = "voice-1", Text = "empty", OutputFormat = "mp3" },
+    "cartesia-key");
+AssertFalse(cartesiaEmptyResult.Success, "Cartesia empty response returns an unsuccessful result");
+AssertEqual(0, Directory.Exists(cartesiaFailureDirectory) ? Directory.GetFiles(cartesiaFailureDirectory).Length : 0, "Cartesia failures leave no reserved output files");
+
+using (var cartesiaCancellation = new CancellationTokenSource())
+{
+    cartesiaCancellation.Cancel();
+    await AssertThrowsAsync<OperationCanceledException>(
+        () => new CartesiaTtsProvider(new HttpClient(new CancellationProbeHandler()), cartesiaSettings).GenerateAsync(
+            new TtsRequest { VendorId = "cartesia", VoiceId = "voice-1", Text = "cancel" },
+            "cartesia-key",
+            cartesiaCancellation.Token),
+        "Cartesia generation propagates cancellation");
+}
 
 Console.WriteLine("Cartesia provider request body and voice parser tests passed.");
 
@@ -2288,7 +2339,8 @@ AssertTrue(deepgramVendor.DefaultVoices.Any(voice => voice.Id == "aura-2-apollo-
 
 var cartesiaVendor = VendorRegistry.GetById("cartesia") ?? throw new Exception("Cartesia vendor config is missing");
 AssertTrue(cartesiaVendor.SupportsVoiceFetch, "Cartesia vendor enables online voice refresh");
-AssertTrue(cartesiaVendor.Capabilities.SupportsSsml, "Cartesia vendor exposes SSML support");
+AssertFalse(cartesiaVendor.Capabilities.SupportsSsml, "Cartesia vendor does not overstate its inline tags as full SSML");
+AssertTrue(cartesiaVendor.Capabilities.SupportedInputFormats.SequenceEqual(new[] { TtsInputFormat.PlainText }), "Cartesia vendor exposes plain transcript input while allowing documented inline tags");
 AssertTrue(cartesiaVendor.Capabilities.SupportsEmotion, "Cartesia vendor exposes emotion support");
 AssertTrue(cartesiaVendor.Capabilities.SupportedOutputFormats.SequenceEqual(new[] { "mp3", "wav" }), "Cartesia vendor exposes supported output formats");
 AssertTrue(cartesiaVendor.DefaultModels.Any(model => model.Id == "sonic-3.5"), "Cartesia vendor exposes Sonic 3.5");

@@ -543,9 +543,9 @@ public static class VendorRegistry
             },
             Capabilities = new VendorCapabilities
             {
-                SupportsSsml = true,
+                SupportsSsml = false,
                 SupportsEmotion = true,
-                SupportedInputFormats = new() { TtsInputFormat.PlainText, TtsInputFormat.Ssml },
+                SupportedInputFormats = new() { TtsInputFormat.PlainText },
                 SupportedOutputFormats = new() { "mp3", "wav" }
             },
             SpeedDef = new TtsParameterDef { Min = 0.6, Max = 1.5, Default = 1.0, Step = 0.1 },
